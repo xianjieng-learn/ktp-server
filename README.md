@@ -1,49 +1,38 @@
-# KTP Auto-Crop
+# KTP Upload Server
 
-**Gak perlu server, gak perlu install!** Cukup buka HTML di HP.
+Foto KTP di HP → Auto-Crop → Download di Komputer
+
+## Jalankan
+
+```bash
+python server.py
+```
 
 ## Cara Pakai
 
-### Opsi 1: Buka Langsung di HP (Paling Gampang)
-1. Download `index.html` dari GitHub
-2. Kirim ke HP (via Telegram/WhatsApp/Email)
-3. Buka file di browser HP
-4. Foto KTP → Auto-Crop → Download ✅
+### 1. Buka di HP
+```
+http://192.168.x.x:8080/hp
+```
+- Foto KTP → Auto-Crop → Upload
 
-### Opsi 2: Buka dari Komputer
-1. Jalankan: `python server.py`
-2. Buka URL di HP
-3. Foto KTP → Auto-Crop → Download ✅
+### 2. Buka di Komputer
+```
+http://localhost:8080/pc
+```
+- Lihat semua foto KTP
+- Klik **Download** untuk simpan
 
-## Workflow
+## Flow
 
 ```
-📸 Foto KTP di HP
-    ↓
-✂️ Auto-Crop di Browser
-    ↓
-📥 Download ke HP
-    ↓
-🔄 Transfer ke Komputer (Snapdrop/Telegram)
-    ↓
-🎯 Upload ke eCourt
+📱 HP: /hp → Foto → Auto-Crop → Upload
+                ↓
+💻 PC: /pc → Lihat → Download ✅
 ```
 
 ## Fitur
 
-- 📱 **Mobile-friendly** — UI untuk HP
-- 📷 **Camera capture** — langsung ambil foto
-- ✂️ **Auto-crop** — detect & crop KTP di browser
-- 📥 **Download** — simpan hasil crop
-- 🐍 **Zero install** — cukup buka HTML
-
-## Tips
-
-- Foto dari angle apa aja, auto-detect KTP
-- Hasil crop langsung bisa didownload
-- Transfer ke komputer pakai **Snapdrop.net** (paling cepat!)
-
-## File
-
-- `index.html` — Buka di HP (bisa langsung, tanpa server)
-- `server.py` — Optional server (kalau mau buka dari komputer)
+- 📱 **HP**: Camera capture + auto-crop
+- 💻 **PC**: Gallery + download
+- 🐍 **Zero install**: Cukup Python bawaan
