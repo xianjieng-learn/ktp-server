@@ -90,6 +90,9 @@ PC_PAGE = r"""<!DOCTYPE html>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,sans-serif;background:#f8fafc;color:#1e293b;padding:30px}
 .hdr{margin-bottom:30px}.hdr h1{font-size:24px}.hdr p{font-size:14px;color:#64748b;margin-top:4px}
+.qr-box{background:#1e293b;border-radius:16px;padding:24px;margin-bottom:30px;display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.qr-box .txt{color:#fff}.qr-box .txt h2{font-size:18px;margin-bottom:6px}.qr-box .txt p{font-size:13px;color:#94a3b8;line-height:1.6}
+.qr-box img{width:150px;height:150px;background:#fff;border-radius:12px;padding:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
 .card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .card img{width:100%;height:180px;object-fit:cover;cursor:pointer}
@@ -104,6 +107,14 @@ body{font-family:-apple-system,sans-serif;background:#f8fafc;color:#1e293b;paddi
 </head>
 <body>
 <div class="hdr"><h1>📸 KTP Photos</h1><p>Upload dari HP, download di sini</p></div>
+<div class="qr-box">
+<div class="txt">
+<h2>📱 Scan dari HP</h2>
+<p>Buka kamera HP → Scan QR ini → Langsung foto KTP</p>
+<p style="margin-top:8px;font-size:12px;color:#64748b">%%HP_URL%%</p>
+</div>
+<img src="%%QR_URL%%" alt="QR Code">
+</div>
 <a class="rf" href="/pc">🔄 Refresh</a>
 <div class="grid">%%ITEMS%%</div>
 </body></html>"""
@@ -126,6 +137,9 @@ class KTPHandler(http.server.BaseHTTPRequestHandler):
             self._html(HP_PAGE)
         elif self.path == '/pc':
             files = sorted(OUTPUT_DIR.glob("ktp_*.jpg"), reverse=True)
+            ip = get_local_ip()
+            hp_url = f"http://{ip}:%%PORT%%/hp"
+            qr_api = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={hp_url}"
             items = ""
             for f in files:
                 ts = f.stem.replace("ktp_", "")
@@ -134,7 +148,8 @@ class KTPHandler(http.server.BaseHTTPRequestHandler):
                 items += f'<div class="card"><img src="/photo/{f.name}" onclick="window.open(\'/photo/{f.name}\')"><div class="inf"><div><div class="nm">{f.name}</div><div class="tm">{t}</div></div><a class="dl" href="/download/{f.name}">📥 Download</a></div></div>'
             if not items:
                 items = '<div class="empty"><div class="ic">📭</div><p>Belum ada foto KTP</p><p style="font-size:12px;margin-top:8px">Upload dari HP dulu!</p></div>'
-            self._html(PC_PAGE.replace("%%ITEMS%%", items))
+            page = PC_PAGE.replace("%%ITEMS%%", items).replace("%%HP_URL%%", hp_url).replace("%%QR_URL%%", qr_api).replace("%%PORT%%", str(self.server.server_address[1]))
+            self._html(page)
         elif self.path.startswith('/photo/') or self.path.startswith('/download/'):
             fname = self.path.split('/')[-1]
             fpath = OUTPUT_DIR / fname
