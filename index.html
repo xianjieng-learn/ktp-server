@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KTP Auto-Crop</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .header { text-align: center; margin-bottom: 25px; }
+        .header h1 { font-size: 22px; font-weight: 700; }
+        .header p { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+        
+        .card {
+            width: 100%;
+            max-width: 380px;
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 24px;
+        }
+        
+        .upload-zone {
+            border: 2px dashed #475569;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .upload-zone:hover { border-color: #3b82f6; background: rgba(59,130,246,0.1); }
+        .upload-zone .icon { font-size: 48px; margin-bottom: 10px; }
+        .upload-zone h3 { font-size: 16px; margin-bottom: 4px; }
+        .upload-zone p { font-size: 12px; color: #64748b; }
+        .upload-zone input { display: none; }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-primary:disabled { background: #475569; cursor: not-allowed; }
+        .btn-download { background: #059669; color: white; display: none; }
+        .btn-download:hover { background: #047857; }
+        
+        .preview {
+            width: 100%;
+            margin-top: 12px;
+            display: none;
+        }
+        .preview.show { display: block; }
+        .preview img {
+            width: 100%;
+            border-radius: 10px;
+            border: 2px solid #334155;
+        }
+        .preview .info {
+            font-size: 11px;
+            color: #64748b;
+            text-align: center;
+            margin-top: 6px;
+        }
+        
+        .status {
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            margin-top: 12px;
+            display: none;
+        }
+        .status.show { display: block; }
+        .status.ok { background: #064e3b; color: #6ee7b7; }
+        .status.err { background: #7f1d1d; color: #fca5a5; }
+        .status.info { background: #1e3a5f; color: #93c5fd; }
+        
+        .tip {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 380px;
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .tip h3 { font-size: 14px; margin-bottom: 8px; color: #fbbf24; }
+        .tip ul { font-size: 12px; color: #94a3b8; padding-left: 18px; }
+        .tip li { margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📸 KTP Auto-Crop</h1>
+        <p>Foto → Auto-Crop → Download</p>
+    </div>
+    
+    <div class="card">
+        <div class="upload-zone" id="zone">
+            <div class="icon">📷</div>
+            <h3>Ketuk untuk Foto</h3>
+            <p>atau pilih dari galeri</p>
+            <input type="file" id="fileInput" accept="image/*" capture="environment">
+        </div>
+        
+        <div class="preview" id="preview">
+            <img id="previewImg">
+            <div class="info" id="previewInfo"></div>
+        </div>
+        
+        <button class="btn btn-primary" id="cropBtn" disabled>✂️ Crop KTP</button>
+        <button class="btn btn-download" id="downloadBtn">📥 Download</button>
+        
+        <div class="status" id="status"></div>
+    </div>
+    
+    <div class="tip">
+        <h3>💡 Tips</h3>
+        <ul>
+            <li>Foto dari angle apa aja, auto-detect KTP</li>
+            <li>Hasil crop langsung bisa didownload</li>
+            <li>Transfer ke komputer pakai Snapdrop/Telegram</li>
+        </ul>
+    </div>
+
+<script>
+const KTP_RATIO = 85.6 / 53.98;
+
+const zone = document.getElementById('zone');
+const fileInput = document.getElementById('fileInput');
+const cropBtn = document.getElementById('cropBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const preview = document.getElementById('preview');
+const previewImg = document.getElementById('previewImg');
+const previewInfo = document.getElementById('previewInfo');
+const statusEl = document.getElementById('status');
+
+let selectedFile = null;
+let croppedBlob = null;
+
+zone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { 
+    if (e.target.files[0]) handleFile(e.target.files[0]); 
+});
+
+function handleFile(file) {
+    selectedFile = file;
+    croppedBlob = null;
+    cropBtn.disabled = false;
+    downloadBtn.style.display = 'none';
+    
+    const reader = new FileReader();
+    reader.onload = e => {
+        previewImg.src = e.target.result;
+        previewInfo.textContent = file.name;
+        preview.classList.add('show');
+    };
+    reader.readAsDataURL(file);
+}
+
+cropBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    
+    cropBtn.disabled = true;
+    cropBtn.textContent = '⏳ Cropping...';
+    showStatus('info', '⏳ Detecting KTP...');
+    
+    try {
+        croppedBlob = await autoCropKTP(selectedFile);
+        
+        if (!croppedBlob) {
+            showStatus('err', '❌ KTP tidak terdeteksi. Coba foto dari angle yang lebih frontal.');
+            cropBtn.disabled = false;
+            cropBtn.textContent = '✂️ Crop KTP';
+            return;
+        }
+        
+        // Show cropped result
+        const url = URL.createObjectURL(croppedBlob);
+        previewImg.src = url;
+        previewInfo.textContent = 'Hasil crop (' + (croppedBlob.size/1024).toFixed(0) + ' KB)';
+        
+        downloadBtn.style.display = 'block';
+        showStatus('ok', '✅ KTP ter-crop! Klik Download untuk menyimpan.');
+        cropBtn.textContent = '✂️ Crop Lagi';
+        cropBtn.disabled = false;
+    } catch(err) {
+        showStatus('err', '❌ Error: ' + err.message);
+        cropBtn.disabled = false;
+        cropBtn.textContent = '✂️ Crop KTP';
+    }
+});
+
+downloadBtn.addEventListener('click', () => {
+    if (!croppedBlob) return;
+    
+    const url = URL.createObjectURL(croppedBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ktp_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'') + '.jpg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showStatus('ok', '✅ Downloaded! Sekarang transfer ke komputer.');
+});
+
+async function autoCropKTP(file) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            // Grayscale
+            const gray = new Uint8Array(canvas.width * canvas.height);
+            for (let i = 0; i < gray.length; i++) {
+                const idx = i * 4;
+                gray[i] = (data[idx] * 0.299 + data[idx+1] * 0.587 + data[idx+2] * 0.114) | 0;
+            }
+            
+            // Edge detection (Sobel)
+            const edges = new Uint8Array(canvas.width * canvas.height);
+            for (let y = 1; y < canvas.height - 1; y++) {
+                for (let x = 1; x < canvas.width - 1; x++) {
+                    const idx = y * canvas.width + x;
+                    const gx = -gray[(y-1)*canvas.width+x-1] + gray[(y-1)*canvas.width+x+1]
+                              -2*gray[y*canvas.width+x-1] + 2*gray[y*canvas.width+x+1]
+                              -gray[(y+1)*canvas.width+x-1] + gray[(y+1)*canvas.width+x+1];
+                    const gy = -gray[(y-1)*canvas.width+x-1] - 2*gray[(y-1)*canvas.width+x] - gray[(y-1)*canvas.width+x+1]
+                              +gray[(y+1)*canvas.width+x-1] + 2*gray[(y+1)*canvas.width+x] + gray[(y+1)*canvas.width+x+1];
+                    edges[idx] = Math.min(255, Math.sqrt(gx*gx + gy*gy)) | 0;
+                }
+            }
+            
+            // Find bounding box
+            let minX = canvas.width, maxX = 0, minY = canvas.height, maxY = 0;
+            let edgeCount = 0;
+            
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    if (edges[y * canvas.width + x] > 50) {
+                        minX = Math.min(minX, x);
+                        maxX = Math.max(maxX, x);
+                        minY = Math.min(minY, y);
+                        maxY = Math.max(maxY, y);
+                        edgeCount++;
+                    }
+                }
+            }
+            
+            // Check if KTP detected
+            if (edgeCount < (canvas.width * canvas.height * 0.01)) {
+                resolve(null);
+                return;
+            }
+            
+            // Add padding
+            const pad = 20;
+            minX = Math.max(0, minX - pad);
+            minY = Math.max(0, minY - pad);
+            maxX = Math.min(canvas.width - 1, maxX + pad);
+            maxY = Math.min(canvas.height - 1, maxY + pad);
+            
+            let cropW = maxX - minX;
+            let cropH = maxY - minY;
+            
+            // Adjust to KTP ratio
+            if (Math.abs(cropW / cropH - KTP_RATIO) > 0.3) {
+                cropH = cropW / KTP_RATIO;
+            }
+            
+            // Create output
+            const outCanvas = document.createElement('canvas');
+            const outW = 1200;
+            const outH = Math.round(outW / KTP_RATIO);
+            outCanvas.width = outW;
+            outCanvas.height = outH;
+            
+            const outCtx = outCanvas.getContext('2d');
+            outCtx.drawImage(canvas, minX, minY, cropW, cropH, 0, 0, outW, outH);
+            
+            outCanvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92);
+        };
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+function showStatus(type, msg) {
+    statusEl.className = 'status show ' + type;
+    statusEl.textContent = msg;
+}
+</script>
+</body>
+</html>
