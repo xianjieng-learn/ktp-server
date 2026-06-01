@@ -1,12 +1,13 @@
-# KTP Upload Server
+# KTP Upload Server (Zero Dependencies)
 
-Buka URL di HP → Foto KTP → Auto-Crop → Tersimpan di komputer!
+Buka URL di HP → Foto KTP → Auto-Crop di Browser → Tersimpan di Komputer!
 
-## Setup
+**Tidak perlu install apapun!** Cukup Python bawaan Windows.
 
-```bash
-pip install flask opencv-python numpy
-```
+## Requirements
+
+- Python 3.6+ (sudah ada di semua Windows/Mac)
+- Tidak perlu pip install!
 
 ## Jalankan
 
@@ -21,38 +22,38 @@ Server akan menampilkan URL untuk diakses dari HP.
 1. **Pastikan HP & komputer di WiFi yang sama**
 2. **Buka browser di HP** → ketik URL yang tertera
 3. **Foto/Upload KTP** → ketuk area upload
-4. **KTP otomatis ter-crop** dan tersimpan di komputer!
+4. **KTP otomatis ter-crop di browser HP** ✅
+5. **Hasilnya tersimpan di komputer!**
 
-## Output
+## Workflow
 
-Foto KTP yang sudah di-crop tersimpan di folder `ktp_photos/` dengan nama:
 ```
-ktp_20260601_153022.jpg
+┌─────────────────────────────────────────────────────────┐
+│  SEBELUM (Lambat):                                       │
+│  HP → WhatsApp → WhatsApp Web → Download → Upload        │
+│  ⏱️ ~2-3 menit per KTP                                   │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│  SESUDAH (Cepat!):                                       │
+│  HP → Buka URL → Foto → Auto-Crop → Tersimpan ✅        │
+│  ⏱️ ~10 detik per KTP                                    │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Fitur
 
 - 📱 **Mobile-friendly** — UI dirancang untuk HP
 - 📷 **Camera capture** — langsung ambil foto dari browser
-- 🖼️ **Drag & drop** — atau upload dari gallery
-- ✂️ **Auto-crop** — detect & straighten KTP otomatis
+- ✂️ **Auto-crop** — detect & crop KTP di browser HP
 - ✨ **Enhance** — perbaiki kualitas gambar
 - 📋 **History** — lihat upload terakhir
+- 🐍 **Zero dependencies** — cukup Python bawaan!
 
-## Workflow
+## Port Custom
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  SEBELUM:                                                │
-│  HP → WhatsApp → WhatsApp Web → Download → Crop Manual   │
-│  ⏱️ ~2-3 menit per KTP                                   │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│  SESUDAH:                                                │
-│  HP → Buka URL → Foto → Auto-Crop ✅                     │
-│  ⏱️ ~15 detik per KTP                                    │
-└─────────────────────────────────────────────────────────┘
+```bash
+python server.py --port 3000
 ```
 
 ## Troubleshooting
@@ -66,15 +67,3 @@ ktp_20260601_153022.jpg
 - Foto dari angle yang lebih frontal
 - Pastikan KTP terlihat jelas
 - Lighting cukup
-
-## Port Custom
-
-```bash
-python server.py --port 3000
-```
-
-## Auto-Open Browser
-
-```bash
-python server.py --open
-```

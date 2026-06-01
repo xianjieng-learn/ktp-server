@@ -1,44 +1,36 @@
 #!/usr/bin/env python3
 """
-KTP Upload Server
-=================
-Simple web server for uploading KTP photos from phone.
-Photos are auto-cropped and saved to local folder.
+KTP Upload - Zero Dependencies Server
+======================================
+Minimal server using only Python built-in modules.
+No Flask, no pip install needed!
 
 Usage:
-  python server.py                    # Start on port 8080
-  python server.py --port 3000        # Custom port
-  python server.py --open             # Auto-open browser
+  python server.py              # Start on port 8080
+  python server.py --port 3000  # Custom port
 
-Then on your phone:
-  1. Make sure phone & computer are on same WiFi
-  2. Open browser → http://<computer-ip>:8080
-  3. Take photo or upload from gallery
-  4. KTP is auto-cropped and saved!
+Requirements: Python 3.6+ (sudah ada di semua Windows)
 """
 
-import cv2
-import numpy as np
+import http.server
+import socketserver
+import json
 import os
 import sys
-import time
 import socket
-import argparse
+import cgi
+import io
 from pathlib import Path
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory, render_template_string
+from urllib.parse import parse_qs
 
 # ─── Config ───
-BASE_DIR = Path(__file__).parent
-OUTPUT_DIR = BASE_DIR / "ktp_photos"
-KTP_ASPECT_RATIO = 85.6 / 53.98
-OUTPUT_WIDTH = 1200
-OUTPUT_HEIGHT = int(OUTPUT_WIDTH / KTP_ASPECT_RATIO)
+PORT = 8080
+OUTPUT_DIR = Path(__file__).parent / "ktp_photos"
+OUTPUT_DIR.mkdir(exist_ok=True)
 
-app = Flask(__name__)
-
-# ─── HTML Template ───
-HTML_TEMPLATE = """
+# ─── HTML Page ───
+HTML_PAGE = r"""
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -48,8 +40,8 @@ HTML_TEMPLATE = """
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0f172a;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: white;
             min-height: 100vh;
             display: flex;
@@ -57,442 +49,408 @@ HTML_TEMPLATE = """
             align-items: center;
             padding: 20px;
         }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-        .header p {
-            font-size: 14px;
-            color: #94a3b8;
-        }
-        .upload-area {
+        .header { text-align: center; margin-bottom: 25px; }
+        .header h1 { font-size: 22px; font-weight: 700; }
+        .header p { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+        
+        .card {
             width: 100%;
-            max-width: 400px;
+            max-width: 380px;
             background: #1e293b;
-            border: 3px dashed #475569;
-            border-radius: 20px;
-            padding: 40px 20px;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+        
+        .upload-zone {
+            border: 2px dashed #475569;
+            border-radius: 12px;
+            padding: 30px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.2s;
         }
-        .upload-area:hover, .upload-area.dragover {
-            border-color: #3b82f6;
-            background: #1e3a5f;
-        }
-        .upload-area .icon {
-            font-size: 64px;
-            margin-bottom: 15px;
-        }
-        .upload-area h2 {
-            font-size: 18px;
-            margin-bottom: 8px;
-        }
-        .upload-area p {
-            font-size: 13px;
-            color: #94a3b8;
-        }
-        .upload-area input[type="file"] {
-            display: none;
-        }
+        .upload-zone:hover { border-color: #3b82f6; background: rgba(59,130,246,0.1); }
+        .upload-zone .icon { font-size: 48px; margin-bottom: 10px; }
+        .upload-zone h3 { font-size: 16px; margin-bottom: 4px; }
+        .upload-zone p { font-size: 12px; color: #64748b; }
+        .upload-zone input { display: none; }
+        
         .btn {
-            display: inline-block;
-            background: #3b82f6;
-            color: white;
+            width: 100%;
+            padding: 14px;
             border: none;
-            padding: 14px 28px;
-            border-radius: 12px;
-            font-size: 16px;
+            border-radius: 10px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            margin-top: 15px;
-            width: 100%;
-            max-width: 400px;
-            transition: background 0.2s;
+            margin-top: 12px;
+            transition: all 0.2s;
         }
-        .btn:hover { background: #2563eb; }
-        .btn:active { transform: scale(0.98); }
-        .btn:disabled { background: #475569; cursor: not-allowed; }
-        
-        .status {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 12px;
-            width: 100%;
-            max-width: 400px;
-            display: none;
-        }
-        .status.show { display: block; }
-        .status.success { background: #065f46; color: #6ee7b7; }
-        .status.error { background: #7f1d1d; color: #fca5a5; }
-        .status.processing { background: #1e3a5f; color: #93c5fd; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-primary:disabled { background: #475569; cursor: not-allowed; }
+        .btn-success { background: #059669; color: white; }
         
         .preview {
-            margin-top: 20px;
             width: 100%;
-            max-width: 400px;
+            margin-top: 12px;
             display: none;
         }
         .preview.show { display: block; }
         .preview img {
             width: 100%;
-            border-radius: 12px;
+            border-radius: 10px;
             border: 2px solid #334155;
         }
-        .preview .label {
-            font-size: 12px;
-            color: #94a3b8;
-            margin-top: 8px;
-            text-align: center;
-        }
-        
-        .history {
-            margin-top: 30px;
-            width: 100%;
-            max-width: 400px;
-        }
-        .history h3 {
-            font-size: 16px;
-            margin-bottom: 10px;
-            color: #94a3b8;
-        }
-        .history-item {
-            background: #1e293b;
-            padding: 12px;
-            border-radius: 10px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .history-item .name {
-            font-size: 13px;
-            color: #e2e8f0;
-        }
-        .history-item .time {
+        .preview .info {
             font-size: 11px;
             color: #64748b;
+            text-align: center;
+            margin-top: 6px;
         }
-        .history-item .badge {
-            font-size: 10px;
-            padding: 3px 8px;
-            border-radius: 6px;
-            background: #065f46;
-            color: #6ee7b7;
+        
+        .status {
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            margin-top: 12px;
+            display: none;
         }
+        .status.show { display: block; }
+        .status.ok { background: #064e3b; color: #6ee7b7; }
+        .status.err { background: #7f1d1d; color: #fca5a5; }
+        .status.info { background: #1e3a5f; color: #93c5fd; }
+        
+        .history { margin-top: 20px; width: 100%; max-width: 380px; }
+        .history h3 { font-size: 14px; color: #64748b; margin-bottom: 10px; }
+        .hist-item {
+            background: #1e293b;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .hist-item .name { color: #e2e8f0; }
+        .hist-item .time { color: #64748b; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>📸 KTP Upload</h1>
-        <p>Foto KTP → Auto-Crop → Tersimpan</p>
+        <p>Auto-crop & upload ke komputer</p>
     </div>
     
-    <div class="upload-area" id="dropZone">
-        <div class="icon">📷</div>
-        <h2>Ketuk untuk Foto/Upload</h2>
-        <p>atau drag & drop file di sini</p>
-        <input type="file" id="fileInput" accept="image/*" capture="environment">
-    </div>
-    
-    <button class="btn" id="uploadBtn" disabled>📤 Upload & Crop</button>
-    
-    <div class="status" id="status"></div>
-    
-    <div class="preview" id="preview">
-        <img id="previewImg" src="" alt="Preview">
-        <div class="label" id="previewLabel"></div>
+    <div class="card">
+        <div class="upload-zone" id="zone">
+            <div class="icon">📷</div>
+            <h3>Ketuk untuk Foto</h3>
+            <p>atau pilih dari galeri</p>
+            <input type="file" id="fileInput" accept="image/*" capture="environment">
+        </div>
+        
+        <div class="preview" id="preview">
+            <img id="previewImg">
+            <div class="info" id="previewInfo"></div>
+        </div>
+        
+        <button class="btn btn-primary" id="uploadBtn" disabled>📤 Upload & Crop</button>
+        
+        <div class="status" id="status"></div>
     </div>
     
     <div class="history" id="history">
         <h3>📋 Upload Terakhir</h3>
-        <div id="historyList"></div>
+        <div id="histList"></div>
     </div>
 
-    <script>
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const status = document.getElementById('status');
-        const preview = document.getElementById('preview');
-        const previewImg = document.getElementById('previewImg');
-        const previewLabel = document.getElementById('previewLabel');
-        const historyList = document.getElementById('historyList');
+<script>
+// ─── KTP Auto-Crop (Client-Side) ───
+const KTP_RATIO = 85.6 / 53.98;
+
+const zone = document.getElementById('zone');
+const fileInput = document.getElementById('fileInput');
+const uploadBtn = document.getElementById('uploadBtn');
+const preview = document.getElementById('preview');
+const previewImg = document.getElementById('previewImg');
+const previewInfo = document.getElementById('previewInfo');
+const statusEl = document.getElementById('status');
+const histList = document.getElementById('histList');
+
+let selectedFile = null;
+
+zone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+    selectedFile = file;
+    uploadBtn.disabled = false;
+    const reader = new FileReader();
+    reader.onload = e => {
+        previewImg.src = e.target.result;
+        previewInfo.textContent = file.name + ' (' + (file.size/1024).toFixed(0) + ' KB)';
+        preview.classList.add('show');
+    };
+    reader.readAsDataURL(file);
+}
+
+uploadBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = '⏳ Processing...';
+    showStatus('info', '⏳ Detecting & cropping KTP...');
+    
+    try {
+        // Step 1: Auto-crop in browser
+        const croppedBlob = await autoCropKTP(selectedFile);
         
-        let selectedFile = null;
-        
-        // Click to upload
-        dropZone.addEventListener('click', () => fileInput.click());
-        
-        // File selected
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFile(e.target.files[0]);
-            }
-        });
-        
-        // Drag & drop
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            if (e.dataTransfer.files.length > 0) {
-                handleFile(e.dataTransfer.files[0]);
-            }
-        });
-        
-        function handleFile(file) {
-            selectedFile = file;
+        if (!croppedBlob) {
+            showStatus('err', '❌ KTP tidak terdeteksi. Coba foto dari angle yang lebih frontal.');
             uploadBtn.disabled = false;
-            
-            // Show preview
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                previewImg.src = e.target.result;
-                previewLabel.textContent = file.name;
-                preview.classList.add('show');
-            };
-            reader.readAsDataURL(file);
+            uploadBtn.textContent = '📤 Upload & Crop';
+            return;
         }
         
-        uploadBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
-            
-            uploadBtn.disabled = true;
-            uploadBtn.textContent = '⏳ Uploading...';
-            showStatus('processing', '⏳ Mengupload & memproses KTP...');
-            
-            const formData = new FormData();
-            formData.append('photo', selectedFile);
-            
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showStatus('success', `✅ Berhasil! Tersimpan: ${result.filename}`);
-                    addHistory(result.filename, result.timestamp);
-                    
-                    // Reset
-                    selectedFile = null;
-                    fileInput.value = '';
-                    preview.classList.remove('show');
-                    setTimeout(() => {
-                        uploadBtn.disabled = false;
-                        uploadBtn.textContent = '📤 Upload & Crop';
-                    }, 2000);
-                } else {
-                    showStatus('error', `❌ ${result.error}`);
-                    uploadBtn.disabled = false;
-                    uploadBtn.textContent = '📤 Upload & Crop';
-                }
-            } catch (err) {
-                showStatus('error', `❌ Error: ${err.message}`);
+        showStatus('info', '⏳ Uploading...');
+        
+        // Step 2: Upload cropped image
+        const formData = new FormData();
+        formData.append('photo', croppedBlob, 'ktp_cropped.jpg');
+        
+        const resp = await fetch('/upload', { method: 'POST', body: formData });
+        const result = await resp.json();
+        
+        if (result.success) {
+            showStatus('ok', '✅ Tersimpan: ' + result.filename);
+            addHist(result.filename, result.time);
+            selectedFile = null;
+            fileInput.value = '';
+            preview.classList.remove('show');
+            setTimeout(() => {
                 uploadBtn.disabled = false;
                 uploadBtn.textContent = '📤 Upload & Crop';
-            }
-        });
-        
-        function showStatus(type, msg) {
-            status.className = `status show ${type}`;
-            status.textContent = msg;
+            }, 1500);
+        } else {
+            showStatus('err', '❌ ' + result.error);
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = '📤 Upload & Crop';
         }
-        
-        function addHistory(filename, timestamp) {
-            const item = document.createElement('div');
-            item.className = 'history-item';
-            item.innerHTML = `
-                <div>
-                    <div class="name">${filename}</div>
-                    <div class="time">${timestamp}</div>
-                </div>
-                <div class="badge">✅ Cropped</div>
-            `;
-            historyList.insertBefore(item, historyList.firstChild);
+    } catch(err) {
+        showStatus('err', '❌ Error: ' + err.message);
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = '📤 Upload & Crop';
+    }
+});
+
+async function autoCropKTP(file) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
             
-            // Keep only last 5
-            while (historyList.children.length > 5) {
-                historyList.removeChild(historyList.lastChild);
+            // Draw image to canvas for pixel access
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            // Convert to grayscale and find edges
+            const gray = new Uint8Array(canvas.width * canvas.height);
+            for (let i = 0; i < gray.length; i++) {
+                const idx = i * 4;
+                gray[i] = (data[idx] * 0.299 + data[idx+1] * 0.587 + data[idx+2] * 0.114) | 0;
             }
-        }
-        
-        // Load history on start
-        fetch('/history').then(r => r.json()).then(data => {
-            if (data.history) {
-                data.history.forEach(h => addHistory(h.filename, h.timestamp));
+            
+            // Simple edge detection (Sobel-like)
+            const edges = new Uint8Array(canvas.width * canvas.height);
+            for (let y = 1; y < canvas.height - 1; y++) {
+                for (let x = 1; x < canvas.width - 1; x++) {
+                    const idx = y * canvas.width + x;
+                    const gx = -gray[(y-1)*canvas.width+x-1] + gray[(y-1)*canvas.width+x+1]
+                              -2*gray[y*canvas.width+x-1] + 2*gray[y*canvas.width+x+1]
+                              -gray[(y+1)*canvas.width+x-1] + gray[(y+1)*canvas.width+x+1];
+                    const gy = -gray[(y-1)*canvas.width+x-1] - 2*gray[(y-1)*canvas.width+x] - gray[(y-1)*canvas.width+x+1]
+                              +gray[(y+1)*canvas.width+x-1] + 2*gray[(y+1)*canvas.width+x] + gray[(y+1)*canvas.width+x+1];
+                    edges[idx] = Math.min(255, Math.sqrt(gx*gx + gy*gy)) | 0;
+                }
             }
-        });
-    </script>
+            
+            // Find bounding box of strong edges
+            let minX = canvas.width, maxX = 0, minY = canvas.height, maxY = 0;
+            const threshold = 50;
+            let edgeCount = 0;
+            
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    if (edges[y * canvas.width + x] > threshold) {
+                        minX = Math.min(minX, x);
+                        maxX = Math.max(maxX, x);
+                        minY = Math.min(minY, y);
+                        maxY = Math.max(maxY, y);
+                        edgeCount++;
+                    }
+                }
+            }
+            
+            // Check if we found enough edges (KTP detected)
+            const totalPixels = canvas.width * canvas.height;
+            if (edgeCount < totalPixels * 0.01) {
+                resolve(null);
+                return;
+            }
+            
+            // Add padding
+            const pad = 20;
+            minX = Math.max(0, minX - pad);
+            minY = Math.max(0, minY - pad);
+            maxX = Math.min(canvas.width - 1, maxX + pad);
+            maxY = Math.min(canvas.height - 1, maxY + pad);
+            
+            // Calculate crop dimensions
+            let cropW = maxX - minX;
+            let cropH = maxY - minY;
+            
+            // Adjust to KTP aspect ratio
+            const currentRatio = cropW / cropH;
+            if (Math.abs(currentRatio - KTP_RATIO) > 0.3) {
+                // Adjust height to match ratio
+                cropH = cropW / KTP_RATIO;
+            }
+            
+            // Create cropped canvas
+            const outCanvas = document.createElement('canvas');
+            const outW = 1200;
+            const outH = Math.round(outW / KTP_RATIO);
+            outCanvas.width = outW;
+            outCanvas.height = outH;
+            
+            const outCtx = outCanvas.getContext('2d');
+            outCtx.drawImage(canvas, minX, minY, cropW, cropH, 0, 0, outW, outH);
+            
+            // Convert to blob
+            outCanvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92);
+        };
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+function showStatus(type, msg) {
+    statusEl.className = 'status show ' + type;
+    statusEl.textContent = msg;
+}
+
+function addHist(name, time) {
+    const item = document.createElement('div');
+    item.className = 'hist-item';
+    item.innerHTML = '<span class="name">' + name + '</span><span class="time">' + time + '</span>';
+    histList.insertBefore(item, histList.firstChild);
+    while (histList.children.length > 5) histList.removeChild(histList.lastChild);
+}
+
+// Load history
+fetch('/history').then(r=>r.json()).then(d=>{
+    if(d.history) d.history.forEach(h => addHist(h.name, h.time));
+});
+</script>
 </body>
 </html>
 """
 
-# ─── KTP Crop Functions ───
-
-def order_points(pts):
-    rect = np.zeros((4, 2), dtype="float32")
-    s = pts.sum(axis=1)
-    rect[0] = pts[np.argmin(s)]
-    rect[2] = pts[np.argmax(s)]
-    diff = np.diff(pts, axis=1)
-    rect[1] = pts[np.argmin(diff)]
-    rect[3] = pts[np.argmax(diff)]
-    return rect
-
-
-def four_point_transform(image, pts):
-    rect = order_points(pts)
-    (tl, tr, br, bl) = rect
-    widthA = np.linalg.norm(br - bl)
-    widthB = np.linalg.norm(tr - tl)
-    maxWidth = max(int(widthA), int(widthB))
-    heightA = np.linalg.norm(tr - br)
-    heightB = np.linalg.norm(tl - bl)
-    maxHeight = max(int(heightA), int(heightB))
-    dst = np.array([[0, 0], [maxWidth - 1, 0], [maxWidth - 1, maxHeight - 1], [0, maxHeight - 1]], dtype="float32")
-    M = cv2.getPerspectiveTransform(rect, dst)
-    return cv2.warpPerspective(image, M, (maxWidth, maxHeight))
-
-
-def detect_ktp(image):
-    scale = 1.0
-    h, w = image.shape[:2]
-    max_dim = 1000
-    if max(h, w) > max_dim:
-        scale = max_dim / max(h, w)
-    resized = cv2.resize(image, None, fx=scale, fy=scale)
-
-    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, 30, 100)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    edges = cv2.dilate(edges, kernel, iterations=2)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)
-    image_area = resized.shape[0] * resized.shape[1]
-
-    for contour in contours[:10]:
-        area = cv2.contourArea(contour)
-        if area < image_area * 0.05:
-            continue
-        peri = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
-        if len(approx) == 4:
-            pts = approx.reshape(4, 2).astype("float32") / scale
-            rect = order_points(pts)
-            (tl, tr, br, bl) = rect
-            width = np.linalg.norm(tr - tl)
-            height = np.linalg.norm(bl - tl)
-            if height == 0:
-                continue
-            if abs(width / height - KTP_ASPECT_RATIO) < 0.3:
-                return rect
-    return None
-
-
-def enhance(image):
-    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    l = clahe.apply(l)
-    return cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
-
-
-def crop_ktp(image):
-    rect = detect_ktp(image)
-    if rect is None:
-        return None, "KTP tidak terdeteksi. Coba foto dari angle yang lebih frontal."
+# ─── Request Handler ───
+class KTPHandler(http.server.BaseHTTPRequestHandler):
     
-    cropped = four_point_transform(image, rect)
-    cropped = enhance(cropped)
-    cropped = cv2.resize(cropped, (OUTPUT_WIDTH, OUTPUT_HEIGHT), interpolation=cv2.INTER_LANCZOS4)
-    return cropped, None
-
-
-# ─── Routes ───
-
-@app.route('/')
-def index():
-    return render_template_string(HTML_TEMPLATE)
-
-
-@app.route('/upload', methods=['POST'])
-def upload():
-    if 'photo' not in request.files:
-        return jsonify({'success': False, 'error': 'Tidak ada foto yang diupload'})
+    def do_GET(self):
+        if self.path == '/' or self.path == '/index.html':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(HTML_PAGE.encode('utf-8'))
+        
+        elif self.path == '/history':
+            files = sorted(OUTPUT_DIR.glob("ktp_*.jpg"), reverse=True)[:10]
+            history = []
+            for f in files:
+                ts = f.stem.replace("ktp_", "")
+                try:
+                    dt = datetime.strptime(ts, "%Y%m%d_%H%M%S")
+                    t = dt.strftime("%d %b %H:%M")
+                except:
+                    t = ts
+                history.append({"name": f.name, "time": t})
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"history": history}).encode())
+        
+        else:
+            self.send_error(404)
     
-    file = request.files['photo']
-    if file.filename == '':
-        return jsonify({'success': False, 'error': 'File tidak valid'})
+    def do_POST(self):
+        if self.path == '/upload':
+            try:
+                content_type = self.headers.get('Content-Type', '')
+                
+                if 'multipart/form-data' in content_type:
+                    # Parse multipart form data
+                    form = cgi.FieldStorage(
+                        fp=self.rfile,
+                        headers=self.headers,
+                        environ={
+                            'REQUEST_METHOD': 'POST',
+                            'CONTENT_TYPE': content_type,
+                        }
+                    )
+                    
+                    file_item = form['photo']
+                    
+                    if file_item.filename:
+                        # Save file
+                        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"ktp_{ts}.jpg"
+                        filepath = OUTPUT_DIR / filename
+                        
+                        with open(filepath, 'wb') as f:
+                            f.write(file_item.file.read())
+                        
+                        time_str = datetime.now().strftime("%d %b %H:%M")
+                        
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({
+                            "success": True,
+                            "filename": filename,
+                            "time": time_str,
+                            "path": str(filepath)
+                        }).encode())
+                    else:
+                        self.send_error(400, "No file uploaded")
+                else:
+                    self.send_error(400, "Invalid content type")
+                    
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "success": False,
+                    "error": str(e)
+                }).encode())
+        else:
+            self.send_error(404)
     
-    # Read image
-    file_bytes = np.frombuffer(file.read(), np.uint8)
-    image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-    
-    if image is None:
-        return jsonify({'success': False, 'error': 'Gagal membaca gambar'})
-    
-    # Crop KTP
-    cropped, error = crop_ktp(image)
-    
-    if error:
-        return jsonify({'success': False, 'error': error})
-    
-    # Save
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"ktp_{ts}.jpg"
-    output_path = OUTPUT_DIR / filename
-    cv2.imwrite(str(output_path), cropped, [cv2.IMWRITE_JPEG_QUALITY, 95])
-    
-    timestamp = datetime.now().strftime("%d %b %Y, %H:%M")
-    return jsonify({
-        'success': True,
-        'filename': filename,
-        'timestamp': timestamp,
-        'path': str(output_path)
-    })
-
-
-@app.route('/history')
-def history():
-    files = sorted(OUTPUT_DIR.glob("ktp_*.jpg"), reverse=True)[:10]
-    history = []
-    for f in files:
-        ts = f.stem.replace("ktp_", "")
-        try:
-            dt = datetime.strptime(ts, "%Y%m%d_%H%M%S")
-            timestamp = dt.strftime("%d %b %Y, %H:%M")
-        except:
-            timestamp = ts
-        history.append({
-            'filename': f.name,
-            'timestamp': timestamp
-        })
-    return jsonify({'history': history})
-
-
-@app.route('/photos/<filename>')
-def serve_photo(filename):
-    return send_from_directory(str(OUTPUT_DIR), filename)
+    def log_message(self, format, *args):
+        # Suppress request logs for cleaner output
+        pass
 
 
 def get_local_ip():
-    """Get local IP address."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
@@ -504,40 +462,36 @@ def get_local_ip():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="KTP Upload Server")
-    parser.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
-    parser.add_argument("--host", default="0.0.0.0", help="Host (default: 0.0.0.0)")
-    parser.add_argument("--open", action="store_true", help="Open browser automatically")
+    import argparse
+    parser = argparse.ArgumentParser(description="KTP Upload Server (Zero Dependencies)")
+    parser.add_argument("--port", type=int, default=8080)
     args = parser.parse_args()
-    
-    # Create output directory
-    OUTPUT_DIR.mkdir(exist_ok=True)
     
     ip = get_local_ip()
     
     print()
     print("=" * 50)
     print("  📸 KTP Upload Server")
+    print("  (Zero Dependencies - Python Built-in Only)")
     print("=" * 50)
     print()
-    print(f"  🌐 Buka di HP: http://{ip}:{args.port}")
+    print(f"  📱 Buka di HP:  http://{ip}:{args.port}")
     print(f"  💻 Buka di PC:  http://localhost:{args.port}")
     print()
-    print(f"  📁 Foto tersimpan di: {OUTPUT_DIR}")
+    print(f"  📁 Foto tersimpan: {OUTPUT_DIR.absolute()}")
     print()
     print("-" * 50)
-    print("  Tips:")
-    print("  • Pastikan HP & komputer di WiFi yang sama")
-    print("  • Buka browser di HP, ketik URL di atas")
-    print("  • Foto KTP, langsung ter-crop otomatis!")
+    print("  ✅ Tidak perlu install apapun!")
+    print("  ✅ Auto-crop di browser HP!")
+    print("  ✅ Langsung tersimpan di komputer!")
     print("=" * 50)
     print()
     
-    if args.open:
-        import webbrowser
-        webbrowser.open(f"http://localhost:{args.port}")
-    
-    app.run(host=args.host, port=args.port, debug=False)
+    with socketserver.TCPServer(("0.0.0.0", args.port), KTPHandler) as httpd:
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\n  👋 Server stopped.")
 
 
 if __name__ == "__main__":
