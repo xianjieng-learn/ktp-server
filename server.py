@@ -259,7 +259,7 @@ const r=await fetch('/api/files');const d=await r.json();
 if(d.count>lastCount){
 lastCount=d.count;
 document.getElementById('grid').innerHTML=d.html;
-try{new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH+Jk42HfnR1gIqWlJOEe3Z4h5SVk4N8d3qJlZSTg3x4e4qVlJODfHh8i5WUk4N9eX2LlZSTg315fouVlJODfXp+i5WUk4N+en+LlZSTg357f4uVlJODfnt/i5WUk4N+fICLlZSTg358gIuVlJODfnyAi5WUk4N+fYCLlZSTg359gIuVlJODfn2Ai5WUk4N+fYCLlZSTg359gIuVlJODfn2Ai5WUk4N+fYCLlZQo=').play();
+try{new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH+Jk42HfnR1gIqWlJOEe3Z4h5SVk4N8d3qJlZSTg3x4e4qVlJODfHh8i5WUk4N9eX2LlZSTg315fouVlJODfXp+i5WUk4N+en+LlZSTg357f4uVlJODfnt/i5WUk4N+fICLlZSTg358gIuVlJODfnyAi5WUk4N+fYCLlZSTg359gIuVlJODfn2Ai5WUk4N+fYCLlZSTg359gIuVlJODfn2Ai5WUk4N+fYCLlZQo=').play()}catch(e){}
 if(Notification.permission==='granted'){new Notification('KTP Baru! 📸',{body:'Foto KTP baru tersimpan',icon:'📷'})}
 }
 document.getElementById('grid').innerHTML=d.html;
