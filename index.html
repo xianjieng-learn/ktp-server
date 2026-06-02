@@ -41,6 +41,165 @@
         .upload-zone h3 { font-size: 16px; margin-bottom: 4px; }
         .upload-zone p { font-size: 12px; color: #64748b; }
         .upload-zone input { display: none; }
+
+        /* Camera viewfinder */
+        .camera-container {
+            display: none;
+            position: relative;
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            margin-bottom: 0;
+            animation: fadeIn 0.3s ease;
+        }
+        .camera-container.show {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .camera-container video {
+            width: 100%;
+            display: block;
+            border-radius: 12px;
+            object-fit: cover;
+        }
+
+        /* KTP guide overlay */
+        .ktp-guide-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .ktp-guide-frame {
+            position: relative;
+            /* KTP ratio: 85.6/53.98 ≈ 1.586 */
+            width: 82%;
+            aspect-ratio: 1.586 / 1;
+            border: 2px solid rgba(255,255,255,0.8);
+            border-radius: 4px;
+            /* Darken outside using box-shadow trick */
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+        }
+        .ktp-guide-frame .guide-text {
+            position: absolute;
+            bottom: -24px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: rgba(255,255,255,0.85);
+            white-space: nowrap;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+            pointer-events: none;
+        }
+
+        /* Corner marks */
+        .corner-mark {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            pointer-events: none;
+        }
+        .corner-mark::before,
+        .corner-mark::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,255,255,0.9);
+        }
+        .corner-mark::before {
+            width: 3px;
+            height: 22px;
+        }
+        .corner-mark::after {
+            width: 22px;
+            height: 3px;
+        }
+        /* Top-left */
+        .corner-mark.tl { top: -2px; left: -2px; }
+        .corner-mark.tl::before { top: 0; left: 0; }
+        .corner-mark.tl::after { top: 0; left: 0; }
+        /* Top-right */
+        .corner-mark.tr { top: -2px; right: -2px; }
+        .corner-mark.tr::before { top: 0; right: 0; }
+        .corner-mark.tr::after { top: 0; right: 0; }
+        /* Bottom-left */
+        .corner-mark.bl { bottom: -2px; left: -2px; }
+        .corner-mark.bl::before { bottom: 0; left: 0; }
+        .corner-mark.bl::after { bottom: 0; left: 0; }
+        /* Bottom-right */
+        .corner-mark.br { bottom: -2px; right: -2px; }
+        .corner-mark.br::before { bottom: 0; right: 0; }
+        .corner-mark.br::after { bottom: 0; right: 0; }
+
+        /* Camera controls */
+        .camera-controls {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px 0 8px;
+            gap: 10px;
+        }
+        .camera-controls.show {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+        .capture-btn {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: 4px solid white;
+            background: transparent;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.15s;
+            padding: 0;
+        }
+        .capture-btn:active { transform: scale(0.9); }
+        .capture-btn::after {
+            content: '';
+            position: absolute;
+            top: 6px; left: 6px; right: 6px; bottom: 6px;
+            border-radius: 50%;
+            background: #ef4444;
+            transition: background 0.15s;
+        }
+        .capture-btn:active::after { background: #dc2626; }
+
+        .gallery-link {
+            font-size: 12px;
+            color: #94a3b8;
+            cursor: pointer;
+            background: none;
+            border: none;
+            text-decoration: underline;
+            padding: 4px 8px;
+        }
+        .gallery-link:hover { color: #cbd5e1; }
+
+        .close-camera-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 5;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            backdrop-filter: blur(4px);
+        }
+        .close-camera-btn:hover { background: rgba(0,0,0,0.8); }
         
         .btn {
             width: 100%;
@@ -100,6 +259,9 @@
         .tip h3 { font-size: 14px; margin-bottom: 8px; color: #fbbf24; }
         .tip ul { font-size: 12px; color: #94a3b8; padding-left: 18px; }
         .tip li { margin-bottom: 4px; }
+
+        /* Hidden canvas for capture */
+        #captureCanvas { display: none; }
     </style>
 </head>
 <body>
@@ -109,11 +271,33 @@
     </div>
     
     <div class="card">
+        <!-- Upload zone (initial state) -->
         <div class="upload-zone" id="zone">
             <div class="icon">📷</div>
             <h3>Ketuk untuk Foto</h3>
             <p>atau pilih dari galeri</p>
-            <input type="file" id="fileInput" accept="image/*" capture="environment">
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+
+        <!-- Camera viewfinder -->
+        <div class="camera-container" id="cameraContainer">
+            <button class="close-camera-btn" id="closeCameraBtn">✕ Tutup</button>
+            <video id="cameraVideo" autoplay playsinline></video>
+            <div class="ktp-guide-overlay">
+                <div class="ktp-guide-frame">
+                    <div class="corner-mark tl"></div>
+                    <div class="corner-mark tr"></div>
+                    <div class="corner-mark bl"></div>
+                    <div class="corner-mark br"></div>
+                    <span class="guide-text">Posisikan KTP di area ini</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Camera controls -->
+        <div class="camera-controls" id="cameraControls">
+            <button class="capture-btn" id="captureBtn" title="Ambil Foto"></button>
+            <button class="gallery-link" id="galleryBtn">atau pilih dari galeri</button>
         </div>
         
         <div class="preview" id="preview">
@@ -136,9 +320,15 @@
         </ul>
     </div>
 
+    <!-- Hidden canvas for capturing video frame -->
+    <canvas id="captureCanvas"></canvas>
+    <!-- Hidden file input for gallery fallback -->
+    <input type="file" id="galleryInput" accept="image/*" style="display:none">
+
 <script>
 const KTP_RATIO = 85.6 / 53.98;
 
+// DOM elements
 const zone = document.getElementById('zone');
 const fileInput = document.getElementById('fileInput');
 const cropBtn = document.getElementById('cropBtn');
@@ -148,14 +338,123 @@ const previewImg = document.getElementById('previewImg');
 const previewInfo = document.getElementById('previewInfo');
 const statusEl = document.getElementById('status');
 
+// Camera elements
+const cameraContainer = document.getElementById('cameraContainer');
+const cameraVideo = document.getElementById('cameraVideo');
+const cameraControls = document.getElementById('cameraControls');
+const captureBtn = document.getElementById('captureBtn');
+const closeCameraBtn = document.getElementById('closeCameraBtn');
+const galleryBtn = document.getElementById('galleryBtn');
+const galleryInput = document.getElementById('galleryInput');
+const captureCanvas = document.getElementById('captureCanvas');
+
 let selectedFile = null;
 let croppedBlob = null;
+let cameraStream = null;
 
-zone.addEventListener('click', () => fileInput.click());
+// ── Upload zone click → open live camera ──
+zone.addEventListener('click', () => openCamera());
+
+// ── Gallery input ──
+galleryBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    galleryInput.click();
+});
 fileInput.addEventListener('change', e => { 
     if (e.target.files[0]) handleFile(e.target.files[0]); 
 });
+galleryInput.addEventListener('change', e => {
+    if (e.target.files[0]) {
+        stopCamera();
+        handleFile(e.target.files[0]);
+    }
+});
 
+// ── Camera functions ──
+async function openCamera() {
+    // Check if getUserMedia is supported
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showStatus('err', '⚠️ Kamera tidak didukung. Silakan pilih dari galeri.');
+        fileInput.click();
+        return;
+    }
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: 'environment',
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            },
+            audio: false
+        });
+        cameraStream = stream;
+        cameraVideo.srcObject = stream;
+        
+        // Hide upload zone, show camera
+        zone.style.display = 'none';
+        cameraContainer.classList.add('show');
+        cameraControls.classList.add('show');
+        
+        // Hide preview/crop/download while camera is open
+        preview.classList.remove('show');
+        downloadBtn.style.display = 'none';
+        cropBtn.disabled = true;
+        statusEl.className = 'status';
+    } catch (err) {
+        console.warn('getUserMedia failed:', err);
+        showStatus('err', '⚠️ Tidak bisa akses kamera. Silakan pilih dari galeri.');
+        // Fallback to file picker
+        fileInput.click();
+    }
+}
+
+function stopCamera() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+    }
+    cameraVideo.srcObject = null;
+    cameraContainer.classList.remove('show');
+    cameraControls.classList.remove('show');
+    zone.style.display = '';
+}
+
+closeCameraBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    stopCamera();
+});
+
+// ── Capture photo from video ──
+captureBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!cameraStream) return;
+
+    const video = cameraVideo;
+    const canvas = captureCanvas;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Stop camera
+    stopCamera();
+
+    // Convert to blob and handle
+    canvas.toBlob(function(blob) {
+        if (!blob) {
+            showStatus('err', '❌ Gagal mengambil foto.');
+            return;
+        }
+        // Create a File from blob so handleFile works as before
+        const file = new File([blob], 'ktp_capture_' + Date.now() + '.jpg', {
+            type: 'image/jpeg'
+        });
+        handleFile(file);
+    }, 'image/jpeg', 0.95);
+});
+
+// ── Handle selected file (camera capture or gallery) ──
 function handleFile(file) {
     selectedFile = file;
     croppedBlob = null;
@@ -165,12 +464,13 @@ function handleFile(file) {
     const reader = new FileReader();
     reader.onload = e => {
         previewImg.src = e.target.result;
-        previewInfo.textContent = file.name;
+        previewInfo.textContent = file.name || 'Foto dari kamera';
         preview.classList.add('show');
     };
     reader.readAsDataURL(file);
 }
 
+// ── Crop button ──
 cropBtn.addEventListener('click', async () => {
     if (!selectedFile) return;
     
@@ -204,6 +504,7 @@ cropBtn.addEventListener('click', async () => {
     }
 });
 
+// ── Download button ──
 downloadBtn.addEventListener('click', () => {
     if (!croppedBlob) return;
     
@@ -219,6 +520,7 @@ downloadBtn.addEventListener('click', () => {
     showStatus('ok', '✅ Downloaded! Sekarang transfer ke komputer.');
 });
 
+// ── Auto-crop algorithm (unchanged) ──
 async function autoCropKTP(file) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -311,6 +613,14 @@ function showStatus(type, msg) {
     statusEl.className = 'status show ' + type;
     statusEl.textContent = msg;
 }
+
+// Stop camera if user navigates away
+window.addEventListener('beforeunload', stopCamera);
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden && cameraStream) {
+        stopCamera();
+    }
+});
 </script>
 </body>
 </html>
