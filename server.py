@@ -179,10 +179,10 @@ body{font-family:-apple-system,sans-serif;background:#f8fafc;color:#1e293b;paddi
 .cam-btn{background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .2s}
 .cam-btn:hover{background:#2563eb}
 .cam-btn:active{transform:scale(.97)}
-.cam-section{display:none;position:relative;background:#000;border-radius:16px;overflow:hidden;margin-bottom:20px;animation:camIn .3s ease}
+.cam-section{display:none;position:relative;background:#000;border-radius:16px;overflow:hidden;margin-bottom:20px;animation:camIn .3s ease;min-height:240px}
 .cam-section.show{display:block}
 @keyframes camIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
-.cam-section video{width:100%;display:block;border-radius:16px;object-fit:cover}
+.cam-section video{width:100%;display:block;border-radius:16px;object-fit:cover;min-height:240px;background:#111}
 .guide-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2}
 .guide-frame{position:relative;width:82%;aspect-ratio:1.586/1;border:2px solid rgba(255,255,255,.8);border-radius:4px;box-shadow:0 0 0 9999px rgba(0,0,0,.55)}
 .corner-mark{position:absolute;width:22px;height:22px;pointer-events:none}
@@ -283,13 +283,17 @@ setTimeout(()=>{pcToast.className='upload-toast'},3000);
 }
 
 async function openPCWebcam(){
-if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){pcToastMsg('⚠️ Kamera tidak didukung browser ini.',true);return}
+console.log('openPCWebcam called, mediaDevices:',!!navigator.mediaDevices);
+if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+console.error('getUserMedia not supported');
+pcToastMsg('⚠️ Kamera tidak didukung. Pastikan akses via localhost (bukan IP LAN) dan pakai Chrome/Firefox.',true);return}
 try{
 const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}},audio:false});
 pcCamStream=stream;pcCamVideo.srcObject=stream;
 pcCamSection.classList.add('show');
 pcCamStatus.textContent='🎥 Kamera aktif — posisikan KTP lalu tekan tombol merah';
-}catch(e){console.warn('getUserMedia failed:',e);pcToastMsg('⚠️ Tidak bisa akses kamera: '+e.message,true)}
+}catch(e){console.warn('getUserMedia failed:',e);
+pcToastMsg('⚠️ Kamera gagal: '+e.message+'. Coba pakai localhost.',true)}
 }
 
 function stopPCWebcam(){
