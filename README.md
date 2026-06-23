@@ -50,7 +50,7 @@ Kalau tidak mau jalanin server Python:
 6. Pilih mode **Foto KTP** atau **Foto SKTM (A4)**
 7. Masukkan dokumen ke kotak putih, klik foto, lalu pakai **Foto Ulang** kalau posisinya belum pas
 8. Klik **Crop & Download**
-9. Kalau hasil crop kurang pas, klik **Crop Manual**, geser/resize kotak bebas, lalu klik **Pakai Crop Manual**
+9. Kalau hasil crop kurang pas, klik **Crop Manual**, geser/resize kotak bebas, lalu klik **Pakai Crop Manual**. Hasil manual crop mengikuti kotak asli, tidak dipanjangin ke rasio KTP/A4.
 
 Hasil crop masuk folder sesuai mode:
 - KTP: `Downloads/Hasil KTP/`

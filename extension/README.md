@@ -41,5 +41,6 @@ Versi extension dari KTP server. Tidak perlu menjalankan `python server.py`.
 - Kamera butuh izin dari Chrome/Edge saat pertama dipakai.
 - Untuk foto dari kamera, crop otomatis mengikuti kotak putih di layar, jadi lebih stabil daripada deteksi tepi otomatis.
 - Crop manual tersedia untuk KTP dan SKTM, bebas rasio sesuai kotak yang ditarik operator.
+- Hasil manual crop disimpan sesuai area kotak asli, tidak dipanjangin/dipaksa ke rasio KTP atau A4.
 - Mode KTP/SKTM menentukan folder output dan default kotak awal.
 - Kalau kamera kantor tidak ada, tetap bisa pilih file gambar dari galeri.

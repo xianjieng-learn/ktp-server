@@ -467,7 +467,7 @@ async function applyManualCrop() {
       h: manualRect.h * scaleY
     };
     const safeRect = clampRectToImage(rect, naturalW, naturalH);
-    const blob = await cropImageToBlob(image, safeRect, safeRect.w / safeRect.h, selectedMode);
+    const blob = await cropImageExactToBlob(image, safeRect);
     URL.revokeObjectURL(image.src);
     await downloadBlob(blob);
     closeManualCrop();
@@ -521,6 +521,14 @@ function cropImageToBlob(source, rect, ratio = getModeConfig(selectedMode).ratio
   const out = document.createElement('canvas');
   out.width = config.outputWidth;
   out.height = Math.round(config.outputWidth / ratio);
+  out.getContext('2d').drawImage(source, rect.x, rect.y, rect.w, rect.h, 0, 0, out.width, out.height);
+  return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', 0.92));
+}
+
+function cropImageExactToBlob(source, rect) {
+  const out = document.createElement('canvas');
+  out.width = Math.max(1, Math.round(rect.w));
+  out.height = Math.max(1, Math.round(rect.h));
   out.getContext('2d').drawImage(source, rect.x, rect.y, rect.w, rect.h, 0, 0, out.width, out.height);
   return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', 0.92));
 }
