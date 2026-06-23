@@ -45,8 +45,11 @@
         <div class="preview-info" id="previewInfo"></div>
       </div>
 
-      <button class="btn primary" id="cropButton" disabled>✂️ Crop & Download</button>
-      <button class="btn secondary" id="resetButton">Reset</button>
+      <div class="action-row">
+        <button class="btn secondary" id="retakeButton" disabled>📷 Foto Ulang</button>
+        <button class="btn primary" id="cropButton" disabled>✂️ Crop & Download</button>
+      </div>
+      <button class="btn ghost" id="resetButton">Reset</button>
       <div class="status" id="statusBox"></div>
     </section>
 
@@ -55,7 +58,7 @@
       <ul>
         <li>Masukkan seluruh KTP ke kotak putih.</li>
         <li>Jangan terlalu mepet pinggir, sisakan sedikit ruang.</li>
-        <li>Area di luar kotak gelap = bagian yang kira-kira tidak dipakai.</li>
+        <li>Foto dari kamera sekarang dipotong mengikuti kotak putih, bukan nebak tepi gambar.</li>
         <li>Hasil disimpan jadi satu di <b>Downloads/Hasil KTP</b>.</li>
       </ul>
     </section>

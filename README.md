@@ -47,5 +47,7 @@ Kalau tidak mau jalanin server Python:
 3. Klik **Load unpacked**
 4. Pilih folder `extension/`
 5. Klik icon **KTP Auto-Crop** → **Buka Kamera**
+6. Masukkan KTP ke kotak putih, klik foto, lalu pakai **Foto Ulang** kalau posisinya belum pas
+7. Klik **Crop & Download**
 
 Hasil crop masuk jadi satu folder di `Downloads/Hasil KTP/`.
