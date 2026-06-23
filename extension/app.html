@@ -3,31 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>KTP Auto-Crop Extension</title>
+  <title>KTP & SKTM Auto-Crop Extension</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main class="wrap">
     <header class="header">
-      <h1>📸 KTP Auto-Crop</h1>
+      <h1>📸 KTP / SKTM Auto-Crop</h1>
       <p>Extension offline — tanpa server, hasil langsung ke Downloads</p>
     </header>
 
     <section class="card">
+      <div class="mode-switch" aria-label="Pilih jenis dokumen">
+        <button class="mode-btn active" type="button" data-mode="ktp">🪪 Foto KTP</button>
+        <button class="mode-btn" type="button" data-mode="sktm">📄 Foto SKTM (A4)</button>
+      </div>
+
       <div class="upload-zone" id="uploadZone">
-        <div class="icon">📷</div>
-        <h2>Ketuk untuk Kamera</h2>
-        <p>atau pilih foto dari galeri</p>
+        <div class="icon" id="modeIcon">📷</div>
+        <h2 id="uploadTitle">Ketuk untuk Kamera KTP</h2>
+        <p id="uploadSubtitle">atau pilih foto KTP dari galeri</p>
       </div>
 
       <div class="camera" id="cameraBox">
         <button class="close" id="closeCamera">✕ Tutup</button>
         <video id="cameraVideo" autoplay playsinline></video>
         <div class="guide-overlay">
-          <div class="guide-frame">
+          <div class="guide-frame" id="guideFrame">
             <span class="corner tl"></span><span class="corner tr"></span>
             <span class="corner bl"></span><span class="corner br"></span>
-            <span class="guide-text">Yang masuk: seluruh KTP • Area gelap akan terpotong</span>
+            <span class="guide-text" id="guideText">Yang masuk: seluruh KTP • Area gelap akan terpotong</span>
           </div>
         </div>
       </div>
@@ -41,7 +46,7 @@
       <canvas id="captureCanvas" hidden></canvas>
 
       <div class="preview" id="previewBox">
-        <img id="previewImage" alt="Preview KTP">
+        <img id="previewImage" alt="Preview dokumen">
         <div class="preview-info" id="previewInfo"></div>
       </div>
 
@@ -56,10 +61,11 @@
     <section class="tips">
       <h3>Tips foto</h3>
       <ul>
-        <li>Masukkan seluruh KTP ke kotak putih.</li>
+        <li>Pilih dulu mode: <b>Foto KTP</b> atau <b>Foto SKTM (A4)</b>.</li>
+        <li>Masukkan seluruh dokumen ke kotak putih.</li>
         <li>Jangan terlalu mepet pinggir, sisakan sedikit ruang.</li>
-        <li>Foto dari kamera sekarang dipotong mengikuti kotak putih, bukan nebak tepi gambar.</li>
-        <li>Hasil disimpan jadi satu di <b>Downloads/Hasil KTP</b>.</li>
+        <li>Foto dari kamera dipotong mengikuti kotak putih, bukan nebak tepi gambar.</li>
+        <li>Hasil KTP masuk <b>Downloads/Hasil KTP</b>, SKTM masuk <b>Downloads/Hasil SKTM</b>.</li>
       </ul>
     </section>
   </main>

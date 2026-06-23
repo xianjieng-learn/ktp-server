@@ -1,4 +1,4 @@
-# KTP Auto-Crop Chrome Extension
+# KTP / SKTM Auto-Crop Chrome Extension
 
 Versi extension dari KTP server. Tidak perlu menjalankan `python server.py`.
 
@@ -12,18 +12,22 @@ Versi extension dari KTP server. Tidak perlu menjalankan `python server.py`.
    ```
    ktp-server/extension
    ```
-6. Pin extension **KTP Auto-Crop** kalau mau gampang dibuka.
+6. Pin extension **KTP / SKTM Auto-Crop** kalau mau gampang dibuka.
 
 ## Cara Pakai
 
 1. Klik icon extension → **Buka Kamera**.
-2. Foto KTP atau pilih dari galeri.
-3. Pastikan seluruh KTP masuk area kotak putih.
-4. Kalau posisi kurang pas, klik **Foto Ulang**.
-5. Klik **Crop & Download**.
-6. Hasil masuk ke:
+2. Pilih mode:
+   - **Foto KTP** untuk KTP.
+   - **Foto SKTM (A4)** untuk dokumen A4.
+3. Foto dokumen atau pilih dari galeri.
+4. Pastikan seluruh dokumen masuk area kotak putih.
+5. Kalau posisi kurang pas, klik **Foto Ulang**.
+6. Klik **Crop & Download**.
+7. Hasil masuk ke folder sesuai mode:
    ```
    Downloads/Hasil KTP/
+   Downloads/Hasil SKTM/
    ```
 
 ## Catatan
@@ -32,4 +36,5 @@ Versi extension dari KTP server. Tidak perlu menjalankan `python server.py`.
 - Tidak perlu server, port 8080, atau jaringan HP-PC.
 - Kamera butuh izin dari Chrome/Edge saat pertama dipakai.
 - Untuk foto dari kamera, crop mengikuti kotak putih di layar, jadi lebih stabil daripada deteksi tepi otomatis.
+- Mode KTP memakai rasio kartu KTP, mode SKTM memakai rasio A4 portrait.
 - Kalau kamera kantor tidak ada, tetap bisa pilih file gambar dari galeri.

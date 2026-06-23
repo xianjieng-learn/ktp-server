@@ -36,7 +36,7 @@ http://localhost:8080/pc
 - 📱 **HP**: Camera capture + auto-crop
 - 💻 **PC**: Gallery + download
 - 🐍 **Zero install**: Cukup Python bawaan
-- 🧩 **Chrome Extension**: bisa pakai tanpa server/Python, hasil langsung ke Downloads
+- 🧩 **Chrome Extension**: bisa pakai tanpa server/Python, hasil KTP dan SKTM langsung ke Downloads
 
 ## Versi Chrome Extension
 
@@ -47,7 +47,10 @@ Kalau tidak mau jalanin server Python:
 3. Klik **Load unpacked**
 4. Pilih folder `extension/`
 5. Klik icon **KTP Auto-Crop** → **Buka Kamera**
-6. Masukkan KTP ke kotak putih, klik foto, lalu pakai **Foto Ulang** kalau posisinya belum pas
-7. Klik **Crop & Download**
+6. Pilih mode **Foto KTP** atau **Foto SKTM (A4)**
+7. Masukkan dokumen ke kotak putih, klik foto, lalu pakai **Foto Ulang** kalau posisinya belum pas
+8. Klik **Crop & Download**
 
-Hasil crop masuk jadi satu folder di `Downloads/Hasil KTP/`.
+Hasil crop masuk folder sesuai mode:
+- KTP: `Downloads/Hasil KTP/`
+- SKTM: `Downloads/Hasil SKTM/`

@@ -1,14 +1,21 @@
-const KTP_RATIO = 85.6 / 53.98;
-const OUTPUT_WIDTH = 1200;
-const OUTPUT_FOLDER = 'Hasil KTP';
+const DOC_MODES = {
+  ktp: { label: 'KTP', icon: '📷', ratio: 85.6 / 53.98, outputWidth: 1200, folder: 'Hasil KTP', prefix: 'ktp' },
+  sktm: { label: 'SKTM', icon: '📄', ratio: 210 / 297, outputWidth: 1240, folder: 'Hasil SKTM', prefix: 'sktm' }
+};
+let currentMode = 'ktp';
 
 const el = (id) => document.getElementById(id);
 const uploadZone = el('uploadZone');
+const modeButtons = document.querySelectorAll('.mode-btn');
+const modeIcon = el('modeIcon');
+const uploadTitle = el('uploadTitle');
+const uploadSubtitle = el('uploadSubtitle');
 const fileInput = el('fileInput');
 const cameraBox = el('cameraBox');
 const cameraVideo = el('cameraVideo');
 const cameraControls = el('cameraControls');
-const guideFrame = document.querySelector('.guide-frame');
+const guideFrame = el('guideFrame');
+const guideText = el('guideText');
 const closeCamera = el('closeCamera');
 const captureButton = el('captureButton');
 const pickGallery = el('pickGallery');
@@ -26,6 +33,7 @@ let selectedGuideCrop = null;
 let cameraStream = null;
 let lastObjectUrl = null;
 
+modeButtons.forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode)));
 uploadZone.addEventListener('click', openCamera);
 pickGallery.addEventListener('click', () => fileInput.click());
 closeCamera.addEventListener('click', stopCamera);
@@ -34,7 +42,7 @@ fileInput.addEventListener('change', (event) => {
   const file = event.target.files && event.target.files[0];
   if (file) {
     stopCamera();
-    setSelectedFile(file);
+    setSelectedFile(file, null, currentMode);
   }
 });
 cropButton.addEventListener('click', cropAndDownload);
@@ -44,6 +52,38 @@ window.addEventListener('beforeunload', stopCamera);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && cameraStream) stopCamera();
 });
+
+function getModeConfig(mode = currentMode) {
+  return DOC_MODES[mode] || DOC_MODES.ktp;
+}
+
+function setMode(mode) {
+  if (!DOC_MODES[mode]) return;
+  currentMode = mode;
+  selectedFile = null;
+  selectedGuideCrop = null;
+  fileInput.value = '';
+  previewBox.classList.remove('show');
+  cropButton.disabled = true;
+  retakeButton.disabled = true;
+  updateModeUi();
+  setStatus('', '');
+}
+
+function updateModeUi() {
+  const config = getModeConfig();
+  modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === currentMode));
+  modeIcon.textContent = config.icon;
+  uploadTitle.textContent = `Ketuk untuk Kamera ${config.label}`;
+  uploadSubtitle.textContent = `atau pilih foto ${config.label} dari galeri`;
+  guideFrame.style.aspectRatio = `${config.ratio} / 1`;
+  guideFrame.classList.toggle('a4', currentMode === 'sktm');
+  guideText.textContent = currentMode === 'sktm'
+    ? 'Yang masuk: seluruh dokumen A4 • Area gelap akan terpotong'
+    : 'Yang masuk: seluruh KTP • Area gelap akan terpotong';
+}
+
+updateModeUi();
 
 async function openCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -100,8 +140,9 @@ function captureFromCamera() {
       setStatus('err', '❌ Gagal mengambil foto.');
       return;
     }
-    const file = new File([blob], `ktp_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
-    setSelectedFile(file, guideCrop);
+    const config = getModeConfig();
+    const file = new File([blob], `${config.prefix}_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+    setSelectedFile(file, guideCrop, currentMode);
   }, 'image/jpeg', 0.95);
 }
 
@@ -131,10 +172,12 @@ function getGuideCropRect() {
   crop.y = clamp(crop.y, 0, videoH - 1);
   crop.w = clamp(crop.w, 1, videoW - crop.x);
   crop.h = clamp(crop.h, 1, videoH - crop.y);
-  return fitRectToKtpRatio(crop, videoW, videoH);
+  return fitRectToRatio(crop, videoW, videoH, getModeConfig().ratio);
 }
 
-function setSelectedFile(file, guideCrop = null) {
+function setSelectedFile(file, guideCrop = null, mode = currentMode) {
+  currentMode = mode;
+  updateModeUi();
   selectedFile = file;
   selectedGuideCrop = guideCrop;
   cropButton.disabled = false;
@@ -144,7 +187,8 @@ function setSelectedFile(file, guideCrop = null) {
   previewImage.src = lastObjectUrl;
   previewInfo.textContent = `${file.name} • ${formatBytes(file.size)}`;
   previewBox.classList.add('show');
-  setStatus('info', guideCrop ? 'Siap disimpan. Crop akan mengikuti kotak putih saat foto tadi.' : 'Siap dicrop. Kalau posisi kurang pas, foto ulang.');
+  const label = getModeConfig().label;
+  setStatus('info', guideCrop ? `Siap disimpan. Crop ${label} akan mengikuti kotak putih saat foto tadi.` : `Siap dicrop sebagai ${label}. Kalau posisi kurang pas, foto ulang.`);
 }
 
 function retakePhoto() {
@@ -162,17 +206,18 @@ async function cropAndDownload() {
   if (!selectedFile) return;
   cropButton.disabled = true;
   cropButton.textContent = '⏳ Cropping...';
-  setStatus('info', selectedGuideCrop ? '⏳ Memotong sesuai kotak guide...' : '⏳ Mencari tepi KTP...');
+  setStatus('info', selectedGuideCrop ? '⏳ Memotong sesuai kotak guide...' : `⏳ Mencari tepi ${getModeConfig().label}...`);
 
   try {
     const blob = await autoCropKtp(selectedFile);
     if (!blob) {
-      setStatus('err', '❌ KTP tidak terdeteksi. Coba foto ulang lebih terang dan seluruh KTP masuk frame.');
+      setStatus('err', '❌ Dokumen tidak terdeteksi. Coba foto ulang lebih terang dan seluruh dokumen masuk frame.');
       return;
     }
 
     const dataUrl = await blobToDataUrl(blob);
-    const filename = `${OUTPUT_FOLDER}/${buildFilename()}.jpg`;
+    const config = getModeConfig();
+    const filename = `${config.folder}/${buildFilename(config.prefix)}.jpg`;
     await chrome.downloads.download({ url: dataUrl, filename, saveAs: false });
     setStatus('ok', `✅ Berhasil disimpan: Downloads/${filename}`);
     selectedFile = null;
@@ -254,14 +299,15 @@ async function autoCropKtp(file) {
   let cropW = maxX - minX;
   let cropH = maxY - minY;
   const currentRatio = cropW / cropH;
-  if (Math.abs(currentRatio - KTP_RATIO) > 0.05) {
-    if (currentRatio > KTP_RATIO) {
-      const targetH = cropW / KTP_RATIO;
+  const targetRatio = getModeConfig().ratio;
+  if (Math.abs(currentRatio - targetRatio) > 0.05) {
+    if (currentRatio > targetRatio) {
+      const targetH = cropW / targetRatio;
       const delta = targetH - cropH;
       minY = Math.max(0, minY - delta / 2);
       maxY = Math.min(height, maxY + delta / 2);
     } else {
-      const targetW = cropH * KTP_RATIO;
+      const targetW = cropH * targetRatio;
       const delta = targetW - cropW;
       minX = Math.max(0, minX - delta / 2);
       maxX = Math.min(width, maxX + delta / 2);
@@ -270,27 +316,28 @@ async function autoCropKtp(file) {
 
   cropW = maxX - minX;
   cropH = maxY - minY;
-  return cropImageToBlob(canvas, { x: minX, y: minY, w: cropW, h: cropH });
+  return cropImageToBlob(canvas, { x: minX, y: minY, w: cropW, h: cropH }, targetRatio);
 }
 
-function cropImageToBlob(source, rect) {
+function cropImageToBlob(source, rect, ratio = getModeConfig().ratio) {
+  const config = getModeConfig();
   const out = document.createElement('canvas');
-  out.width = OUTPUT_WIDTH;
-  out.height = Math.round(OUTPUT_WIDTH / KTP_RATIO);
+  out.width = config.outputWidth;
+  out.height = Math.round(config.outputWidth / ratio);
   out.getContext('2d').drawImage(source, rect.x, rect.y, rect.w, rect.h, 0, 0, out.width, out.height);
   return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', 0.92));
 }
 
-function fitRectToKtpRatio(rect, maxW, maxH) {
+function fitRectToRatio(rect, maxW, maxH, targetRatio) {
   let { x, y, w, h } = rect;
   const ratio = w / h;
-  if (Math.abs(ratio - KTP_RATIO) > 0.01) {
-    if (ratio > KTP_RATIO) {
-      const targetH = w / KTP_RATIO;
+  if (Math.abs(ratio - targetRatio) > 0.01) {
+    if (ratio > targetRatio) {
+      const targetH = w / targetRatio;
       y -= (targetH - h) / 2;
       h = targetH;
     } else {
-      const targetW = h * KTP_RATIO;
+      const targetW = h * targetRatio;
       x -= (targetW - w) / 2;
       w = targetW;
     }
@@ -326,10 +373,10 @@ function blobToDataUrl(blob) {
   });
 }
 
-function buildFilename() {
+function buildFilename(prefix = getModeConfig().prefix) {
   const now = new Date();
   const p = (n) => String(n).padStart(2, '0');
-  return `ktp_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}_${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
+  return `${prefix}_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}_${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
 }
 
 function formatBytes(bytes) {
