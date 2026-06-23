@@ -50,10 +50,29 @@
         <div class="preview-info" id="previewInfo"></div>
       </div>
 
+      <div class="manual-crop" id="manualCropBox">
+        <div class="manual-head">
+          <strong id="manualTitle">Crop Manual</strong>
+          <button class="mini-btn" id="cancelManualButton" type="button">Tutup</button>
+        </div>
+        <div class="manual-stage" id="manualStage">
+          <img id="manualImage" alt="Foto untuk crop manual" draggable="false">
+          <div class="manual-mask" id="manualMask">
+            <span class="manual-handle nw" data-handle="nw"></span>
+            <span class="manual-handle ne" data-handle="ne"></span>
+            <span class="manual-handle sw" data-handle="sw"></span>
+            <span class="manual-handle se" data-handle="se"></span>
+          </div>
+        </div>
+        <p class="manual-help">Geser kotak atau tarik sudutnya. Rasio mengikuti mode aktif: KTP atau A4.</p>
+        <button class="btn primary" id="applyManualButton" type="button">✅ Pakai Crop Manual</button>
+      </div>
+
       <div class="action-row">
         <button class="btn secondary" id="retakeButton" disabled>📷 Foto Ulang</button>
         <button class="btn primary" id="cropButton" disabled>✂️ Crop & Download</button>
       </div>
+      <button class="btn warning" id="manualButton" disabled>🖐️ Crop Manual</button>
       <button class="btn ghost" id="resetButton">Reset</button>
       <div class="status" id="statusBox"></div>
     </section>
@@ -63,7 +82,7 @@
       <ul>
         <li>Pilih dulu mode: <b>Foto KTP</b> atau <b>Foto SKTM (A4)</b>.</li>
         <li>Masukkan seluruh dokumen ke kotak putih.</li>
-        <li>Jangan terlalu mepet pinggir, sisakan sedikit ruang.</li>
+        <li>Kalau hasil auto kurang pas, klik <b>Crop Manual</b>, lalu geser kotaknya.</li>
         <li>Foto dari kamera dipotong mengikuti kotak putih, bukan nebak tepi gambar.</li>
         <li>Hasil KTP masuk <b>Downloads/Hasil KTP</b>, SKTM masuk <b>Downloads/Hasil SKTM</b>.</li>
       </ul>

@@ -23,8 +23,12 @@ Versi extension dari KTP server. Tidak perlu menjalankan `python server.py`.
 3. Foto dokumen atau pilih dari galeri.
 4. Pastikan seluruh dokumen masuk area kotak putih.
 5. Kalau posisi kurang pas, klik **Foto Ulang**.
-6. Klik **Crop & Download**.
-7. Hasil masuk ke folder sesuai mode:
+6. Klik **Crop & Download** untuk crop otomatis/guide.
+7. Kalau hasil crop kurang pas, klik **Crop Manual**:
+   - Geser kotak crop ke dokumen.
+   - Tarik sudut kotak untuk memperbesar/perkecil.
+   - Klik **Pakai Crop Manual**.
+8. Hasil masuk ke folder sesuai mode:
    ```
    Downloads/Hasil KTP/
    Downloads/Hasil SKTM/
@@ -35,6 +39,7 @@ Versi extension dari KTP server. Tidak perlu menjalankan `python server.py`.
 - Extension berjalan offline/lokal.
 - Tidak perlu server, port 8080, atau jaringan HP-PC.
 - Kamera butuh izin dari Chrome/Edge saat pertama dipakai.
-- Untuk foto dari kamera, crop mengikuti kotak putih di layar, jadi lebih stabil daripada deteksi tepi otomatis.
+- Untuk foto dari kamera, crop otomatis mengikuti kotak putih di layar, jadi lebih stabil daripada deteksi tepi otomatis.
+- Crop manual tersedia untuk KTP dan SKTM.
 - Mode KTP memakai rasio kartu KTP, mode SKTM memakai rasio A4 portrait.
 - Kalau kamera kantor tidak ada, tetap bisa pilih file gambar dari galeri.

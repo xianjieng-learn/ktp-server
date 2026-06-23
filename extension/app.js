@@ -25,13 +25,24 @@ const previewImage = el('previewImage');
 const previewInfo = el('previewInfo');
 const cropButton = el('cropButton');
 const retakeButton = el('retakeButton');
+const manualButton = el('manualButton');
 const resetButton = el('resetButton');
 const statusBox = el('statusBox');
+const manualCropBox = el('manualCropBox');
+const manualTitle = el('manualTitle');
+const manualStage = el('manualStage');
+const manualImage = el('manualImage');
+const manualMask = el('manualMask');
+const applyManualButton = el('applyManualButton');
+const cancelManualButton = el('cancelManualButton');
 
 let selectedFile = null;
 let selectedGuideCrop = null;
+let selectedMode = currentMode;
 let cameraStream = null;
 let lastObjectUrl = null;
+let manualRect = null;
+let manualPointer = null;
 
 modeButtons.forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode)));
 uploadZone.addEventListener('click', openCamera);
@@ -47,7 +58,16 @@ fileInput.addEventListener('change', (event) => {
 });
 cropButton.addEventListener('click', cropAndDownload);
 retakeButton.addEventListener('click', retakePhoto);
+manualButton.addEventListener('click', openManualCrop);
+applyManualButton.addEventListener('click', applyManualCrop);
+cancelManualButton.addEventListener('click', closeManualCrop);
 resetButton.addEventListener('click', resetAll);
+manualMask.addEventListener('pointerdown', startManualPointer);
+window.addEventListener('pointermove', moveManualPointer);
+window.addEventListener('pointerup', stopManualPointer);
+window.addEventListener('resize', () => {
+  if (manualCropBox.classList.contains('show')) initManualRect();
+});
 window.addEventListener('beforeunload', stopCamera);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && cameraStream) stopCamera();
@@ -60,12 +80,13 @@ function getModeConfig(mode = currentMode) {
 function setMode(mode) {
   if (!DOC_MODES[mode]) return;
   currentMode = mode;
+  selectedMode = mode;
   selectedFile = null;
   selectedGuideCrop = null;
   fileInput.value = '';
   previewBox.classList.remove('show');
-  cropButton.disabled = true;
-  retakeButton.disabled = true;
+  closeManualCrop();
+  setReadyButtons(false);
   updateModeUi();
   setStatus('', '');
 }
@@ -107,8 +128,8 @@ async function openCamera() {
     cameraBox.classList.add('show');
     cameraControls.classList.add('show');
     previewBox.classList.remove('show');
-    cropButton.disabled = true;
-    retakeButton.disabled = true;
+    closeManualCrop();
+    setReadyButtons(false);
     setStatus('', '');
   } catch (error) {
     console.warn('Kamera gagal:', error);
@@ -130,6 +151,7 @@ function stopCamera() {
 
 function captureFromCamera() {
   if (!cameraStream || !cameraVideo.videoWidth) return;
+  const modeAtCapture = currentMode;
   const guideCrop = getGuideCropRect();
   captureCanvas.width = cameraVideo.videoWidth;
   captureCanvas.height = cameraVideo.videoHeight;
@@ -140,9 +162,9 @@ function captureFromCamera() {
       setStatus('err', '❌ Gagal mengambil foto.');
       return;
     }
-    const config = getModeConfig();
+    const config = getModeConfig(modeAtCapture);
     const file = new File([blob], `${config.prefix}_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
-    setSelectedFile(file, guideCrop, currentMode);
+    setSelectedFile(file, guideCrop, modeAtCapture);
   }, 'image/jpeg', 0.95);
 }
 
@@ -153,7 +175,6 @@ function getGuideCropRect() {
   const videoH = cameraVideo.videoHeight;
   if (!videoRect.width || !videoRect.height || !videoW || !videoH) return null;
 
-  // CSS video uses object-fit: cover. Map the visible guide box back to the real video pixels.
   const scale = Math.max(videoRect.width / videoW, videoRect.height / videoH);
   const renderedW = videoW * scale;
   const renderedH = videoH * scale;
@@ -177,18 +198,25 @@ function getGuideCropRect() {
 
 function setSelectedFile(file, guideCrop = null, mode = currentMode) {
   currentMode = mode;
+  selectedMode = mode;
   updateModeUi();
   selectedFile = file;
   selectedGuideCrop = guideCrop;
-  cropButton.disabled = false;
-  retakeButton.disabled = false;
+  setReadyButtons(true);
+  closeManualCrop();
   if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
   lastObjectUrl = URL.createObjectURL(file);
   previewImage.src = lastObjectUrl;
   previewInfo.textContent = `${file.name} • ${formatBytes(file.size)}`;
   previewBox.classList.add('show');
   const label = getModeConfig().label;
-  setStatus('info', guideCrop ? `Siap disimpan. Crop ${label} akan mengikuti kotak putih saat foto tadi.` : `Siap dicrop sebagai ${label}. Kalau posisi kurang pas, foto ulang.`);
+  setStatus('info', guideCrop ? `Siap disimpan. Crop ${label} akan mengikuti kotak putih saat foto tadi.` : `Siap dicrop sebagai ${label}. Kalau auto kurang pas, pakai Crop Manual.`);
+}
+
+function setReadyButtons(enabled) {
+  cropButton.disabled = !enabled;
+  retakeButton.disabled = !enabled;
+  manualButton.disabled = !enabled;
 }
 
 function retakePhoto() {
@@ -196,8 +224,8 @@ function retakePhoto() {
   selectedGuideCrop = null;
   fileInput.value = '';
   previewBox.classList.remove('show');
-  cropButton.disabled = true;
-  retakeButton.disabled = true;
+  closeManualCrop();
+  setReadyButtons(false);
   setStatus('', '');
   openCamera();
 }
@@ -209,21 +237,13 @@ async function cropAndDownload() {
   setStatus('info', selectedGuideCrop ? '⏳ Memotong sesuai kotak guide...' : `⏳ Mencari tepi ${getModeConfig().label}...`);
 
   try {
-    const blob = await autoCropKtp(selectedFile);
+    const blob = await autoCropDocument(selectedFile);
     if (!blob) {
-      setStatus('err', '❌ Dokumen tidak terdeteksi. Coba foto ulang lebih terang dan seluruh dokumen masuk frame.');
+      setStatus('err', '❌ Dokumen tidak terdeteksi. Pakai Crop Manual, atau foto ulang lebih terang.');
       return;
     }
-
-    const dataUrl = await blobToDataUrl(blob);
-    const config = getModeConfig();
-    const filename = `${config.folder}/${buildFilename(config.prefix)}.jpg`;
-    await chrome.downloads.download({ url: dataUrl, filename, saveAs: false });
-    setStatus('ok', `✅ Berhasil disimpan: Downloads/${filename}`);
-    selectedFile = null;
-    selectedGuideCrop = null;
-    fileInput.value = '';
-    retakeButton.disabled = true;
+    await downloadBlob(blob);
+    clearSelectedAfterDownload();
   } catch (error) {
     console.error(error);
     setStatus('err', `❌ ${error.message || error}`);
@@ -233,10 +253,10 @@ async function cropAndDownload() {
   }
 }
 
-async function autoCropKtp(file) {
+async function autoCropDocument(file) {
   const image = await loadImage(file);
   if (selectedGuideCrop) {
-    const blob = await cropImageToBlob(image, selectedGuideCrop);
+    const blob = await cropImageToBlob(image, selectedGuideCrop, getModeConfig(selectedMode).ratio, selectedMode);
     URL.revokeObjectURL(image.src);
     return blob;
   }
@@ -298,8 +318,8 @@ async function autoCropKtp(file) {
 
   let cropW = maxX - minX;
   let cropH = maxY - minY;
+  const targetRatio = getModeConfig(selectedMode).ratio;
   const currentRatio = cropW / cropH;
-  const targetRatio = getModeConfig().ratio;
   if (Math.abs(currentRatio - targetRatio) > 0.05) {
     if (currentRatio > targetRatio) {
       const targetH = cropW / targetRatio;
@@ -316,11 +336,183 @@ async function autoCropKtp(file) {
 
   cropW = maxX - minX;
   cropH = maxY - minY;
-  return cropImageToBlob(canvas, { x: minX, y: minY, w: cropW, h: cropH }, targetRatio);
+  return cropImageToBlob(canvas, { x: minX, y: minY, w: cropW, h: cropH }, targetRatio, selectedMode);
 }
 
-function cropImageToBlob(source, rect, ratio = getModeConfig().ratio) {
-  const config = getModeConfig();
+function openManualCrop() {
+  if (!selectedFile || !lastObjectUrl) return;
+  selectedGuideCrop = null;
+  manualTitle.textContent = `Crop Manual ${getModeConfig(selectedMode).label}`;
+  manualImage.src = lastObjectUrl;
+  manualCropBox.classList.add('show');
+  previewBox.classList.remove('show');
+  setStatus('info', 'Geser kotak manual ke area dokumen, lalu klik Pakai Crop Manual.');
+  if (manualImage.complete && manualImage.naturalWidth) {
+    requestAnimationFrame(initManualRect);
+  } else {
+    manualImage.onload = () => requestAnimationFrame(initManualRect);
+  }
+}
+
+function closeManualCrop() {
+  manualCropBox.classList.remove('show');
+  manualPointer = null;
+  manualRect = null;
+  if (selectedFile) previewBox.classList.add('show');
+}
+
+function initManualRect() {
+  const bounds = getImageBoundsInStage();
+  if (!bounds.width || !bounds.height) return;
+  const ratio = getModeConfig(selectedMode).ratio;
+  let w = bounds.width * (selectedMode === 'sktm' ? 0.62 : 0.82);
+  let h = w / ratio;
+  if (h > bounds.height * 0.86) {
+    h = bounds.height * 0.86;
+    w = h * ratio;
+  }
+  manualRect = {
+    x: bounds.x + (bounds.width - w) / 2,
+    y: bounds.y + (bounds.height - h) / 2,
+    w,
+    h
+  };
+  renderManualRect();
+}
+
+function startManualPointer(event) {
+  if (!manualRect) return;
+  event.preventDefault();
+  manualMask.setPointerCapture?.(event.pointerId);
+  const handle = event.target.dataset.handle || 'move';
+  manualPointer = {
+    id: event.pointerId,
+    handle,
+    startX: event.clientX,
+    startY: event.clientY,
+    rect: { ...manualRect }
+  };
+}
+
+function moveManualPointer(event) {
+  if (!manualPointer || event.pointerId !== manualPointer.id) return;
+  event.preventDefault();
+  const dx = event.clientX - manualPointer.startX;
+  const dy = event.clientY - manualPointer.startY;
+  const bounds = getImageBoundsInStage();
+  const ratio = getModeConfig(selectedMode).ratio;
+  let rect = { ...manualPointer.rect };
+
+  if (manualPointer.handle === 'move') {
+    rect.x += dx;
+    rect.y += dy;
+  } else {
+    const signX = manualPointer.handle.includes('w') ? -1 : 1;
+    const signY = manualPointer.handle.includes('n') ? -1 : 1;
+    const dominant = Math.abs(dx) > Math.abs(dy) ? dx * signX : dy * signY * ratio;
+    const minW = Math.min(bounds.width * 0.25, 160);
+    let newW = clamp(manualPointer.rect.w + dominant, minW, bounds.width);
+    let newH = newW / ratio;
+    if (newH > bounds.height) {
+      newH = bounds.height;
+      newW = newH * ratio;
+    }
+    if (manualPointer.handle.includes('w')) rect.x = manualPointer.rect.x + manualPointer.rect.w - newW;
+    if (manualPointer.handle.includes('n')) rect.y = manualPointer.rect.y + manualPointer.rect.h - newH;
+    rect.w = newW;
+    rect.h = newH;
+  }
+
+  rect = keepRectInside(rect, bounds);
+  manualRect = rect;
+  renderManualRect();
+}
+
+function stopManualPointer(event) {
+  if (manualPointer && event.pointerId === manualPointer.id) {
+    manualPointer = null;
+  }
+}
+
+function renderManualRect() {
+  if (!manualRect) return;
+  manualMask.style.left = `${manualRect.x}px`;
+  manualMask.style.top = `${manualRect.y}px`;
+  manualMask.style.width = `${manualRect.w}px`;
+  manualMask.style.height = `${manualRect.h}px`;
+  manualMask.style.setProperty('--crop-w', `${manualRect.w}px`);
+  manualMask.style.setProperty('--crop-h', `${manualRect.h}px`);
+}
+
+async function applyManualCrop() {
+  if (!selectedFile || !manualRect) return;
+  applyManualButton.disabled = true;
+  applyManualButton.textContent = '⏳ Menyimpan...';
+  try {
+    const image = await loadImage(selectedFile);
+    const bounds = getImageBoundsInStage();
+    const naturalW = image.naturalWidth || image.width;
+    const naturalH = image.naturalHeight || image.height;
+    const scaleX = naturalW / bounds.width;
+    const scaleY = naturalH / bounds.height;
+    const rect = {
+      x: (manualRect.x - bounds.x) * scaleX,
+      y: (manualRect.y - bounds.y) * scaleY,
+      w: manualRect.w * scaleX,
+      h: manualRect.h * scaleY
+    };
+    const safeRect = fitRectToRatio(rect, naturalW, naturalH, getModeConfig(selectedMode).ratio);
+    const blob = await cropImageToBlob(image, safeRect, getModeConfig(selectedMode).ratio, selectedMode);
+    URL.revokeObjectURL(image.src);
+    await downloadBlob(blob);
+    closeManualCrop();
+    clearSelectedAfterDownload();
+  } catch (error) {
+    console.error(error);
+    setStatus('err', `❌ ${error.message || error}`);
+  } finally {
+    applyManualButton.disabled = false;
+    applyManualButton.textContent = '✅ Pakai Crop Manual';
+  }
+}
+
+function getImageBoundsInStage() {
+  const stage = manualStage.getBoundingClientRect();
+  const img = manualImage.getBoundingClientRect();
+  return {
+    x: img.left - stage.left,
+    y: img.top - stage.top,
+    width: img.width,
+    height: img.height
+  };
+}
+
+function keepRectInside(rect, bounds) {
+  rect.w = Math.min(rect.w, bounds.width);
+  rect.h = Math.min(rect.h, bounds.height);
+  rect.x = clamp(rect.x, bounds.x, bounds.x + bounds.width - rect.w);
+  rect.y = clamp(rect.y, bounds.y, bounds.y + bounds.height - rect.h);
+  return rect;
+}
+
+async function downloadBlob(blob) {
+  const dataUrl = await blobToDataUrl(blob);
+  const config = getModeConfig(selectedMode);
+  const filename = `${config.folder}/${buildFilename(config.prefix)}.jpg`;
+  await chrome.downloads.download({ url: dataUrl, filename, saveAs: false });
+  setStatus('ok', `✅ Berhasil disimpan: Downloads/${filename}`);
+}
+
+function clearSelectedAfterDownload() {
+  selectedFile = null;
+  selectedGuideCrop = null;
+  fileInput.value = '';
+  setReadyButtons(false);
+  previewBox.classList.remove('show');
+}
+
+function cropImageToBlob(source, rect, ratio = getModeConfig(selectedMode).ratio, mode = selectedMode) {
+  const config = getModeConfig(mode);
   const out = document.createElement('canvas');
   out.width = config.outputWidth;
   out.height = Math.round(config.outputWidth / ratio);
@@ -373,7 +565,7 @@ function blobToDataUrl(blob) {
   });
 }
 
-function buildFilename(prefix = getModeConfig().prefix) {
+function buildFilename(prefix = getModeConfig(selectedMode).prefix) {
   const now = new Date();
   const p = (n) => String(n).padStart(2, '0');
   return `${prefix}_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}_${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
@@ -402,8 +594,8 @@ function resetAll() {
   selectedGuideCrop = null;
   fileInput.value = '';
   previewBox.classList.remove('show');
-  cropButton.disabled = true;
-  retakeButton.disabled = true;
+  closeManualCrop();
+  setReadyButtons(false);
   cropButton.textContent = '✂️ Crop & Download';
   if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
   lastObjectUrl = null;
