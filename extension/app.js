@@ -1,6 +1,6 @@
 const KTP_RATIO = 85.6 / 53.98;
 const OUTPUT_WIDTH = 1200;
-const OUTPUT_FOLDER = 'KTP Auto-Crop';
+const OUTPUT_FOLDER = 'Hasil KTP';
 
 const el = (id) => document.getElementById(id);
 const uploadZone = el('uploadZone');

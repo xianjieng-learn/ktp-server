@@ -48,4 +48,4 @@ Kalau tidak mau jalanin server Python:
 4. Pilih folder `extension/`
 5. Klik icon **KTP Auto-Crop** → **Buka Kamera**
 
-Hasil crop masuk ke `Downloads/KTP Auto-Crop/`.
+Hasil crop masuk jadi satu folder di `Downloads/Hasil KTP/`.

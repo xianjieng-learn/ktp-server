@@ -22,7 +22,7 @@ Versi extension dari KTP server. Tidak perlu menjalankan `python server.py`.
 4. Klik **Crop & Download**.
 5. Hasil masuk ke:
    ```
-   Downloads/KTP Auto-Crop/
+   Downloads/Hasil KTP/
    ```
 
 ## Catatan
