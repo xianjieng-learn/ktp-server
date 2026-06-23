@@ -343,15 +343,14 @@ function openManualCrop() {
   if (!selectedFile || !lastObjectUrl) return;
   selectedGuideCrop = null;
   manualTitle.textContent = `Crop Manual ${getModeConfig(selectedMode).label}`;
-  manualImage.src = lastObjectUrl;
+  manualImage.onload = () => requestAnimationFrame(initManualRect);
+  manualImage.src = '';
   manualCropBox.classList.add('show');
   previewBox.classList.remove('show');
-  setStatus('info', 'Geser kotak manual ke area dokumen, lalu klik Pakai Crop Manual.');
-  if (manualImage.complete && manualImage.naturalWidth) {
-    requestAnimationFrame(initManualRect);
-  } else {
-    manualImage.onload = () => requestAnimationFrame(initManualRect);
-  }
+  setStatus('info', 'Geser kotak manual bebas lebar/tinggi ke area dokumen, lalu klik Pakai Crop Manual.');
+  requestAnimationFrame(() => {
+    manualImage.src = lastObjectUrl;
+  });
 }
 
 function closeManualCrop() {
@@ -400,32 +399,38 @@ function moveManualPointer(event) {
   const dx = event.clientX - manualPointer.startX;
   const dy = event.clientY - manualPointer.startY;
   const bounds = getImageBoundsInStage();
-  const ratio = getModeConfig(selectedMode).ratio;
   let rect = { ...manualPointer.rect };
 
   if (manualPointer.handle === 'move') {
     rect.x += dx;
     rect.y += dy;
+    rect = keepRectInside(rect, bounds);
   } else {
-    const signX = manualPointer.handle.includes('w') ? -1 : 1;
-    const signY = manualPointer.handle.includes('n') ? -1 : 1;
-    const dominant = Math.abs(dx) > Math.abs(dy) ? dx * signX : dy * signY * ratio;
-    const minW = Math.min(bounds.width * 0.25, 160);
-    let newW = clamp(manualPointer.rect.w + dominant, minW, bounds.width);
-    let newH = newW / ratio;
-    if (newH > bounds.height) {
-      newH = bounds.height;
-      newW = newH * ratio;
-    }
-    if (manualPointer.handle.includes('w')) rect.x = manualPointer.rect.x + manualPointer.rect.w - newW;
-    if (manualPointer.handle.includes('n')) rect.y = manualPointer.rect.y + manualPointer.rect.h - newH;
-    rect.w = newW;
-    rect.h = newH;
+    rect = resizeManualRectFree(rect, manualPointer.handle, dx, dy, bounds);
   }
 
-  rect = keepRectInside(rect, bounds);
   manualRect = rect;
   renderManualRect();
+}
+
+function resizeManualRectFree(startRect, handle, dx, dy, bounds) {
+  const minSize = Math.min(80, bounds.width * 0.18, bounds.height * 0.18);
+  let left = startRect.x;
+  let right = startRect.x + startRect.w;
+  let top = startRect.y;
+  let bottom = startRect.y + startRect.h;
+
+  if (handle.includes('w')) left = clamp(startRect.x + dx, bounds.x, right - minSize);
+  if (handle.includes('e')) right = clamp(startRect.x + startRect.w + dx, left + minSize, bounds.x + bounds.width);
+  if (handle.includes('n')) top = clamp(startRect.y + dy, bounds.y, bottom - minSize);
+  if (handle.includes('s')) bottom = clamp(startRect.y + startRect.h + dy, top + minSize, bounds.y + bounds.height);
+
+  return {
+    x: left,
+    y: top,
+    w: right - left,
+    h: bottom - top
+  };
 }
 
 function stopManualPointer(event) {
@@ -461,8 +466,8 @@ async function applyManualCrop() {
       w: manualRect.w * scaleX,
       h: manualRect.h * scaleY
     };
-    const safeRect = fitRectToRatio(rect, naturalW, naturalH, getModeConfig(selectedMode).ratio);
-    const blob = await cropImageToBlob(image, safeRect, getModeConfig(selectedMode).ratio, selectedMode);
+    const safeRect = clampRectToImage(rect, naturalW, naturalH);
+    const blob = await cropImageToBlob(image, safeRect, safeRect.w / safeRect.h, selectedMode);
     URL.revokeObjectURL(image.src);
     await downloadBlob(blob);
     closeManualCrop();
@@ -518,6 +523,14 @@ function cropImageToBlob(source, rect, ratio = getModeConfig(selectedMode).ratio
   out.height = Math.round(config.outputWidth / ratio);
   out.getContext('2d').drawImage(source, rect.x, rect.y, rect.w, rect.h, 0, 0, out.width, out.height);
   return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', 0.92));
+}
+
+function clampRectToImage(rect, maxW, maxH) {
+  let x = clamp(rect.x, 0, maxW - 1);
+  let y = clamp(rect.y, 0, maxH - 1);
+  let w = clamp(rect.w, 1, maxW - x);
+  let h = clamp(rect.h, 1, maxH - y);
+  return { x, y, w, h };
 }
 
 function fitRectToRatio(rect, maxW, maxH, targetRatio) {
