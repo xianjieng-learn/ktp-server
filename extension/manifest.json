@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "KTP Auto-Crop",
+  "version": "1.0.0",
+  "description": "Foto KTP dari kamera/galeri, auto-crop, lalu download tanpa server.",
+  "permissions": ["downloads", "storage"],
+  "action": {
+    "default_title": "KTP Auto-Crop",
+    "default_popup": "popup.html"
+  }
+}
